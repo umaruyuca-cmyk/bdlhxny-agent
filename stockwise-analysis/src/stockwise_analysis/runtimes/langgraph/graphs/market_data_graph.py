@@ -123,6 +123,7 @@ def build_market_data_graph(
     research_agent: Any | None = None,
     llm_research_agent: Any | None = None,
     max_react_rounds: int = _DEFAULT_MAX_REACT_ROUNDS,
+    budget_lookup: Any | None = None,
 ):
     """构建市场数据获取子图（审查文档 §4.5 执行矩阵）。
 
@@ -164,7 +165,7 @@ def build_market_data_graph(
         # normalize → 回到 select_action 继续 ReAct 循环（受轮数限制）
         graph.add_conditional_edges(
             "normalize_observation",
-            _make_react_router(max_react_rounds),
+            _make_react_router(max_react_rounds, budget_lookup),
             {"continue": "select_action", "stop": "evaluate_market_data"},
         )
         graph.add_edge("evaluate_market_data", END)
@@ -199,12 +200,28 @@ def _make_select_action_node(research_agent: Any, llm_research_agent: Any = None
     def select_action(state: RootState) -> dict:
         analysis_type = state.get("intent", {}).get("analysis_type", "market_snapshot")
 
-        # market_snapshot 快路径：不经 ReAct，直接 finish
+        # market_snapshot 快路径：确定性取 quote 一次，不进 LLM 决策循环。
+        # 首次进入（尚无 realtime_quote observation）→ 返回 get_realtime_quote 动作；
+        # 取完后再次进入 → finish。轮数不计（0），不会无限循环。
         if analysis_type == "market_snapshot":
+            observations = state.get("observations", [])
+            # 已尝试取过 quote（无论成功失败）就 finish：market_snapshot 0 轮 ReAct，
+            # 取一次就结束，失败标记 known_unavailable 不重试（避免快路径无限循环）
+            has_quote_attempt = any(
+                o.get("capability") == "market.get_realtime_quote" for o in observations
+            )
+            if has_quote_attempt:
+                return {
+                    "_react_round": state.get("_react_round", 0),
+                    "_current_action": {"action": "finish", "arguments": {}, "reason": "快路径：实时行情已尝试获取"},
+                    "events": [event(state, "model.decision", "select_action", {"action": "finish", "mode": "fast_path"})],
+                }
+            # 还未取 quote → 确定性动作（不调 LLM，避免 market_snapshot 真实模式空数据）
+            symbol = state.get("intent", {}).get("symbol") or state.get("request", {}).get("symbol")
             return {
                 "_react_round": state.get("_react_round", 0),
-                "_current_action": {"action": "finish", "arguments": {}, "reason": "快路径不启动 ReAct"},
-                "events": [event(state, "model.decision", "select_action", {"action": "finish", "mode": "fast_path"})],
+                "_current_action": {"action": "market.get_realtime_quote", "arguments": {"symbol": symbol}, "reason": "快路径：确定性获取实时行情"},
+                "events": [event(state, "model.decision", "select_action", {"action": "market.get_realtime_quote", "mode": "fast_path"})],
             }
 
         # 按 analysis_type 选 agent：comprehensive 用 LLM 版，其他用规则版
@@ -269,13 +286,31 @@ def _normalize_observations_node(state: RootState) -> dict:
     }
 
 
-def _make_react_router(max_rounds: int):
-    """构建 ReAct 循环路由器：未达上限且需求未满足则继续，否则停止。"""
+def _make_react_router(max_rounds: int, budget_lookup: Any | None = None):
+    """构建 ReAct 循环路由器：未达上限且需求未满足则继续，否则停止。
+
+    budget_lookup 注入后，按运行时 analysis_type 动态查 react_round_limit
+    和 tool_call_limit（审查文档 §4.5：预算按分析类型分档）。
+    无 lookup 时退回固定 max_rounds（兼容旧测试）。
+    """
 
     def router(state: RootState) -> str:
+        analysis_type = state.get("intent", {}).get("analysis_type", "market_snapshot")
+        if budget_lookup is not None:
+            budget = budget_lookup(analysis_type)
+            round_limit = budget.react_round_limit
+            tool_limit = budget.tool_call_limit
+        else:
+            round_limit = max_rounds
+            tool_limit = None
         round_count = state.get("_react_round", 0)
-        if round_count >= max_rounds:
+        if round_count >= round_limit:
             return "stop"
+        # tool 调用次数检查（observations 中每条算一次实际调用）
+        if tool_limit is not None:
+            tool_calls = len(state.get("observations", []))
+            if tool_calls >= tool_limit:
+                return "stop"
         # 检查是否还有未满足的需求
         observations = state.get("observations", [])
         fulfilled = {o.get("capability") for o in observations if o.get("status") == "SUCCESS"}

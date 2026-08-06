@@ -20,6 +20,7 @@ from stockwise_analysis.runtimes.langgraph.graphs.root_graph import build_root_g
 
 from .errors import ConfigurationError
 from .llm import create_llm
+from .budgets import budget_for
 
 # Java API 地址的环境变量名（与 config 一致）
 _JAVA_API_BASE_URL_ENV = "JAVA_API_BASE_URL"
@@ -104,6 +105,7 @@ def create_application(settings: Settings | None = None) -> StockWiseApplication
         llm_research_agent=llm_research_agent,
         java_adapter=java_adapter,
         context_builder=context_builder,
+        budget_lookup=budget_for,
     )
 
     return StockWiseApplication(

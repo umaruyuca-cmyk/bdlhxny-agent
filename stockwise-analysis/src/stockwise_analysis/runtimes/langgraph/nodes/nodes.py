@@ -124,6 +124,14 @@ def build_data_requirements(state: RootState) -> dict[str, Any]:
         requirements.append(
             DataRequirement(requirement_id="valuation", capability="market.get_valuation", required=True, reason="估值分析需要估值数据", arguments={"symbol": symbol})
         )
+    # comprehensive 补充行业背景与新闻舆情（非关键，缺失不阻断，标记 known_unavailable）
+    if analysis_type == "comprehensive":
+        requirements.append(
+            DataRequirement(requirement_id="industry", capability="market.get_industry_context", required=False, reason="综合分析需要行业背景", arguments={"symbol": symbol})
+        )
+        requirements.append(
+            DataRequirement(requirement_id="news", capability="market.get_news", required=False, reason="综合分析需要新闻舆情", arguments={"symbol": symbol})
+        )
     # portfolio 由独立节点 load_portfolio_context 处理，不列入 ReAct requirements
     return {
         "data_requirements": [item.model_dump() for item in requirements],
@@ -326,8 +334,11 @@ def assemble_analysis(state: RootState) -> dict[str, Any]:
 
     # 数据质量：completeness 按"本分析类型实际请求的 DataRequirement 中已满足
     # 的比例"计算，而非全局域数——market_snapshot 只需 quote，不应因财报缺失
-    # 被扣分。缺失进 known_unavailable。
-    required_capabilities = {req.get("capability") for req in state.get("data_requirements", [])}
+    # 被扣分。缺失进 known_unavailable。只统计 required=True 的需求，非关键需求
+    # （如 comprehensive 的 industry/news）缺失不拉低 completeness。
+    required_capabilities = {
+        req.get("capability") for req in state.get("data_requirements", []) if req.get("required")
+    }
     fulfilled = {obs.capability for obs in observations if obs.status == "SUCCESS" and obs.capability in _CAPABILITY_TO_FIELD}
     if required_capabilities:
         completeness = len(required_capabilities & fulfilled) / len(required_capabilities)

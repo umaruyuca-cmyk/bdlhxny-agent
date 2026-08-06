@@ -187,3 +187,54 @@ async def test_async_nodes_supported():
     result = await graph.ainvoke(state)
     assert result["_react_round"] == 1
     assert gateway.calls[0][0] == "market.get_realtime_quote"
+
+
+@pytest.mark.asyncio
+async def test_market_snapshot_fast_path_fetches_quote():
+    """market_snapshot 快路径：真实模式下确定性取 quote 一次，不经 LLM 决策循环。
+
+    验证 P1 修复（核查报告 §4.2）：market_snapshot 不再直接 finish 返回空数据，
+    而是取 get_realtime_quote 后才结束。_react_round 始终 0（快路径不启动 ReAct）。
+    """
+    gateway = FakeGateway({"market.get_realtime_quote": _observation("market.get_realtime_quote")})
+    # market_snapshot 走快路径，research_agent 不会被调用，但 build_market_data_graph 要求注入
+    agent = FakeResearchAgent([])
+    graph = build_market_data_graph(gateway_adapter=gateway, research_agent=agent, max_react_rounds=6)
+
+    state = _initial_state([{"capability": "market.get_realtime_quote", "arguments": {"symbol": "600519"}}])
+    state["intent"]["analysis_type"] = "market_snapshot"
+    result = await graph.ainvoke(state)
+
+    # 确定性取了一次 quote（不直接 finish 空数据）
+    assert len(gateway.calls) == 1
+    assert gateway.calls[0][0] == "market.get_realtime_quote"
+    # 快路径不计 ReAct 轮次
+    assert result["_react_round"] == 0
+    # quote observation 进了 state
+    capabilities = {o["capability"] for o in result["observations"]}
+    assert "market.get_realtime_quote" in capabilities
+
+
+@pytest.mark.asyncio
+async def test_budget_lookup_enforces_per_type_limits():
+    """budget_lookup 注入后按 analysis_type 动态查预算（核查报告 §4.1）。
+
+    market_snapshot 的 react_round_limit=0：即使需求未满足也立即停止（0 轮 ReAct）。
+    验证 budget_for 真正参与 Graph 调度，而非固定 max_react_rounds。
+    """
+    from stockwise_analysis.runtime.budgets import budget_for
+
+    gateway = FakeGateway({"market.get_realtime_quote": _observation("market.get_realtime_quote")})
+    agent = FakeResearchAgent(["market.get_realtime_quote"])
+    # 注入 budget_lookup，market_snapshot 的 react_round_limit=0
+    graph = build_market_data_graph(
+        gateway_adapter=gateway, research_agent=agent, budget_lookup=budget_for
+    )
+
+    state = _initial_state([{"capability": "market.get_realtime_quote", "arguments": {"symbol": "600519"}}])
+    state["intent"]["analysis_type"] = "market_snapshot"
+    result = await graph.ainvoke(state)
+
+    # market_snapshot 快路径取了 quote，但因 react_round_limit=0 不会继续 ReAct
+    assert len(gateway.calls) == 1
+    assert result["_react_round"] == 0

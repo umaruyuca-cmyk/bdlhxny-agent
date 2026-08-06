@@ -52,6 +52,7 @@ def build_root_graph(
     llm_research_agent=None,
     java_adapter=None,
     context_builder=None,
+    budget_lookup=None,
 ):
     """构建顶层动态流程。
 
@@ -86,6 +87,7 @@ def build_root_graph(
             gateway_adapter=gateway_adapter,
             research_agent=research_agent,
             llm_research_agent=llm_research_agent,
+            budget_lookup=budget_lookup,
         ),
     )
     # 有 java_adapter 用工厂节点（真实 Java + 内部降级），否则用默认 mock
