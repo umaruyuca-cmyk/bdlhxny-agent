@@ -1,0 +1,158 @@
+name: touchstone-private-dependencies
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: touchstone-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_SUPERUSER}
+      POSTGRES_PASSWORD: ${POSTGRES_SUPERUSER_PASSWORD}
+      TOUCHSTONE_DATA_DB_PASSWORD: ${TOUCHSTONE_DATA_DB_PASSWORD}
+      TOUCHSTONE_MEMORY_DB_PASSWORD: ${TOUCHSTONE_MEMORY_DB_PASSWORD}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - touchstone-postgres:/var/lib/postgresql/data
+      - ./postgres/00-init.sh:/docker-entrypoint-initdb.d/00-init.sh:ro
+      - ../db/postgresql:/touchstone-db/postgresql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rmq-namesrv:
+    image: apache/rocketmq:5.3.2
+    container_name: touchstone-rmq-namesrv
+    restart: unless-stopped
+    command: sh mqnamesrv
+    expose:
+      - "9876"
+    volumes:
+      - rocketmq-namesrv-logs:/home/rocketmq/logs
+    healthcheck:
+      test: ["CMD-SHELL", "sh mqadmin clusterList -n 127.0.0.1:9876 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  rmq-broker:
+    image: apache/rocketmq:5.3.2
+    container_name: touchstone-rmq-broker
+    restart: unless-stopped
+    command: sh mqbroker --enable-proxy -c /home/rocketmq/rocketmq-5.3.2/conf/touchstone-broker.conf
+    environment:
+      NAMESRV_ADDR: rmq-namesrv:9876
+    depends_on:
+      rmq-namesrv:
+        condition: service_healthy
+    expose:
+      - "8081"
+      - "10909"
+      - "10911"
+      - "10912"
+    volumes:
+      - ./rocketmq/broker.conf:/home/rocketmq/rocketmq-5.3.2/conf/touchstone-broker.conf:ro
+      - rocketmq-store:/home/rocketmq/store
+      - rocketmq-broker-logs:/home/rocketmq/logs
+    healthcheck:
+      test: ["CMD-SHELL", "sh mqadmin clusterList -n rmq-namesrv:9876 >/dev/null 2>&1"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  rmq-init:
+    image: apache/rocketmq:5.3.2
+    container_name: touchstone-rmq-init
+    restart: "no"
+    environment:
+      NAMESRV_ADDR: rmq-namesrv:9876
+    depends_on:
+      rmq-broker:
+        condition: service_healthy
+    command:
+      - sh
+      - -ec
+      - |
+        sh mqadmin updatetopic -n rmq-namesrv:9876 -c DefaultCluster -t bdlh.runtime.events
+        sh mqadmin updatetopic -n rmq-namesrv:9876 -c DefaultCluster -t bdlh.user.events
+        sh mqadmin updatetopic -n rmq-namesrv:9876 -c DefaultCluster -t bdlh.memory.commands
+        sh mqadmin updateSubGroup -n rmq-namesrv:9876 -c DefaultCluster -g bdlh-memory-consumer
+
+  sentinel-data:
+    build:
+      context: ../sentinel-data
+      dockerfile: Dockerfile
+    container_name: touchstone-data
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8081:8080"
+    environment:
+      SERVER_ADDRESS: 0.0.0.0
+      SERVER_PORT: 8080
+      PG_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB}
+      PG_USER: ${TOUCHSTONE_DATA_DB_USER}
+      PG_PASSWORD: ${TOUCHSTONE_DATA_DB_PASSWORD}
+      MYSQL_URL: ""
+      MYSQL_USER: ""
+      MYSQL_PASSWORD: ""
+      BDLH_RUNTIME_SINGLE_USER_ID: ${BDLH_RUNTIME_SINGLE_USER_ID}
+      JWT_SECRET: ${JWT_SECRET}
+      JAVA_DATA_INTERNAL_TOKEN: ${JAVA_DATA_INTERNAL_TOKEN}
+      JAVA_DATA_REQUIRE_AUTHENTICATED: "true"
+      ROCKETMQ_ENABLED: ${ROCKETMQ_ENABLED}
+      ROCKETMQ_ENDPOINTS: rmq-broker:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rmq-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+
+  sentinel-memory:
+    build:
+      context: ../sentinel-memory
+      dockerfile: Dockerfile
+    container_name: touchstone-memory
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8091:8091"
+    environment:
+      BDLH_RUNTIME_ENV: development
+      MEMORY_SERVICE_INTERNAL_TOKEN: ${MEMORY_SERVICE_INTERNAL_TOKEN}
+      MEMORY_POSTGRES_DSN: postgresql://${TOUCHSTONE_MEMORY_DB_USER}:${TOUCHSTONE_MEMORY_DB_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      MEMORY_ROCKETMQ_ENABLED: ${MEMORY_ROCKETMQ_ENABLED}
+      ROCKETMQ_ENDPOINTS: rmq-broker:8081
+      MEM0_CONFIG_JSON: ${MEM0_CONFIG_JSON}
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL}
+      QWEN3_API_KEY: ${QWEN3_API_KEY}
+      QWEN3_BASE_URL: ${QWEN3_BASE_URL}
+      MEM0_EMBEDDER_MODEL: ${MEM0_EMBEDDER_MODEL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rmq-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8091/health/ready')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  touchstone-postgres:
+  rocketmq-namesrv-logs:
+  rocketmq-store:
+  rocketmq-broker-logs:

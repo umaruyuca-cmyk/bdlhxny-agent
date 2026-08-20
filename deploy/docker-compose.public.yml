@@ -1,0 +1,17 @@
+name: touchstone-public
+
+services:
+  showcase:
+    build:
+      context: ../sentinel-console
+      dockerfile: Dockerfile
+    container_name: touchstone-showcase
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8082:8082"
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8082/docs/"]
+      interval: 10s
+      timeout: 3s
+      retries: 8
+      start_period: 5s

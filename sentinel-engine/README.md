@@ -1,33 +1,31 @@
-# sentinel-engine（Sentinel Agent 引擎）
+# sentinel-engine（Touchstone 被测引擎）
 
-Sentinel 产品的 Python 引擎（FastAPI）。承担两条驱动通道共用的 Agent 执行能力：
+Touchstone 用于对照实验的 Python Agent 内核，保留固定题库运行需要的能力：
 
-- **看护环**：事件源（价格轮询 / 晨报定时 / 演示注入）→ 唤醒 → 上下文组装 → 结构化事件解读 → 通知；
-- **会话通道**：语义快路径分流 → Agent 循环（LLM tool calling）→ SSE 真流式应答。
+- 语义快路径和 Agent tool calling 循环；
+- `scoped | search` 工具装载；
+- 工具目录、代码拦截和 Observation 标准化；
+- 强制项保留、预算选择、压缩、引用、用户隔离和上下文处理报告；
+- 裸 tool calling、LangGraph ReAct 和完整工程模式对照。
 
-设计真源：[`docs/architecture/00-Sentinel产品设计与架构.md`](../docs/architecture/00-Sentinel产品设计与架构.md)；
-文件归属规则：[`docs/00-仓库文件管理树.md`](../docs/00-仓库文件管理树.md)。
+新版设计从 [`docs/README.md`](../docs/README.md) 开始阅读；上下文压缩规则见
+[`docs/03-上下文压缩设计.md`](../docs/03-上下文压缩设计.md)。
 
-> T0–T4-1 已按实施 Prompt 落地（看护环、工具目录、SSE v2、看护首页）。T4-3 演示彩排未完成。
-> 目标分层名与仓库目录若不一致，以代码事实与 [文件树](../docs/00-仓库文件管理树.md) 为准。
+> 当前代码仍保留任意 `message` 和历史消息结构；目标产品只允许登录用户通过固定
+> `case_id` 创建运行。迁移步骤见 `docs/05-实施计划与验收标准.md`。
 
-## 架构分层（目标形态）
+## 架构分层
 
 ```text
-api/                  FastAPI 入口：SSE、REST、鉴权
-watch/                事件源与唤醒调度（T1 新增）
-routing/              语义快路径（现 cognitive/semantic_router/）
-engine/               统一 Agent 循环（现 cognitive/ 重构而来，T2）
-tools/                统一工具目录：本地 pydantic 工具 + MCP ToolCard（T2）
-governance/           治理中间件（现 guardrails/ 演化，T2）
-context/              上下文组装器（会话态 / 唤醒态）
-memory/               L3 记忆客户端（Remote Memory Service）
-compute/              确定性计算（零框架依赖）：指标 / 风险 / 交易日历
-integrations/mcp/     MCP 接入
-observations/         Observation 标准化
-infra/                装配、运行控制、checkpoint、任务调度
-prompts/              prompt 资产（独立文件、版本化、eval 门禁）
-domains/              【RETIRED】域插件框架，T2 物理删除（统一工具目录取代）
+engine/               Agent 循环、工具装载、快路径和输出检查
+tools/                工具目录和工具检索
+guardrails/           权限、只读、预算、参数与审计检查
+observations/         工具结果标准化
+memory/               记忆接口与召回基础
+registry/             工具资格和目录基础
+tests/eval/           固定题库和三种 Agent 实现方式对照
+context/              上下文收集、预算选择、压缩、引用、隔离和校验
+artifacts/            目标新增：统一运行工件和公开发布数据
 ```
 
 核心原则：**模型提议，代码裁决**——意图理解与工具选择由模型完成（快路径 + 原生
@@ -38,13 +36,13 @@ tool calling）；只读、权限、预算等不可挽回决策由治理中间�
 - Mock 数据只用于开发 / 测试（带 `is_mock` 标记），不得用于任何真实市场结论；
 - 不具备任何交易执行能力（设计文档 C-1）；
 - 适合度输出仅为风险匹配筛查草稿（DRAFT），不出具适当性结论（C-2）；
-- 运行依赖：`JAVA_API_BASE_URL`、`JAVA_DATA_INTERNAL_TOKEN`、`LLM_API_KEY`（默认智谱 GLM）、MCP endpoints；依赖缺失经 `/ready` 显性报 degraded，不静默降级。
+- 真实模型评测需要 `LLM_API_KEY`；单元测试和确定性回归不应依赖外部模型服务。
 
-## 本地运行
+## 运行评测
 
 ```powershell
 uv sync --extra dev
-uv run uvicorn bdlh_runtime.main:app --reload --host 127.0.0.1 --port 8090
+uv run python -m tests.eval.ab_eval --runs 5
 ```
 
 ## 测试
@@ -53,6 +51,8 @@ uv run uvicorn bdlh_runtime.main:app --reload --host 127.0.0.1 --port 8090
 uv run pytest -q
 ```
 
-覆盖：Agent 循环、语义路由、治理中间件、看护环（事件源 / 幂等 / 唤醒）、记忆降级、
-checkpoint 恢复、API 契约与身份隔离、内核纯净度门禁（`tests/architecture/`）。
-eval 对照题库见 `tests/eval/`（T2 起）。
+覆盖：Agent 循环、语义路由、工具装载、治理中间件、工具结果标准化、工具目录、
+上下文构建、内核边界和评测器。固定题库与对照 runner 位于 `tests/eval/`。
+
+当前 Dockerfile 只构建可复用的引擎库镜像，不启动旧聊天服务。只接受固定
+`case_id` 的私有运行 API 完成后，才会加入 `deploy/docker-compose.yml`。
