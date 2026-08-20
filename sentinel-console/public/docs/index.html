@@ -4,76 +4,79 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>架构概览 · Sentinel</title>
+<title>概览 · Touchstone</title>
 <link rel="stylesheet" href="/docs/docs.css">
 </head>
 <body>
-<div class="docs-top">
-  <a class="brand" href="/"><em>グリッドユニバース研究所</em> · Sentinel 文档</a>
-  <button class="docs-menu-btn" id="menuBtn" type="button">目录</button>
-</div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/docs/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="页面导航">
+      <a href="/docs/">概览</a>
+      <details class="topnav-group">
+        <summary>对照实验</summary>
+        <div class="topnav-menu">
+          <a href="/docs/comparison">三种架构对照</a>
+          <a href="/docs/eval">评测口径</a>
+          <a href="/docs/cases">固定题库</a>
+          <a href="/docs/results">评测结果</a>
+        </div>
+      </details>
+      <details class="topnav-group">
+        <summary>引擎架构</summary>
+        <div class="topnav-menu">
+          <a href="/docs/agents">Agent 循环</a>
+          <a href="/docs/skill">工具目录与治理</a>
+          <a href="/docs/tools">工具清单</a>
+        </div>
+      </details>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
 <div class="docs-layout">
-  <nav class="docs-nav" id="docsNav">
-    <h4>架构</h4>
+  <aside class="docs-side" id="docsSide">
+    <h4>本页目录</h4>
     <ul>
-      <li>
-        <a href="/docs/" class="active">架构概览</a>
-        <ul class="nav-sub">
-          <li><a href="#thesis">核心主张</a></li>
-          <li><a href="#capabilities">三个可量化的能力</a></li>
-          <li><a href="#carrier">产品载体</a></li>
-          <li><a href="#modules">业务模块</a></li>
-          <li><a href="#architecture">整体架构</a></li>
-          <li><a href="#flow">双通道链路</a></li>
-        </ul>
-      </li>
-      <li>
-        <a href="/docs/agents">Agent 循环</a>
-        <ul class="nav-sub">
-          <li><a href="/docs/agents#channels">双通道</a></li>
-          <li><a href="/docs/agents#loop">Agent 循环</a></li>
-          <li><a href="/docs/agents#loading">scoped / search</a></li>
-          <li><a href="/docs/agents#sse">SSE 输出</a></li>
-        </ul>
-      </li>
-      <li>
-        <a href="/docs/skill">工具目录与治理</a>
-        <ul class="nav-sub">
-          <li><a href="/docs/skill#toolcard">ToolCard</a></li>
-          <li><a href="/docs/skill#governance">G1–G7</a></li>
-          <li><a href="/docs/skill#constraints">C-1 / C-2</a></li>
-          <li><a href="/docs/skill#mcp">本地工具 + MCP</a></li>
-        </ul>
-      </li>
-      <li><a href="/docs/tools">工具清单</a></li>
+      <li><a href="#thesis">核心主张</a></li>
+      <li><a href="#capabilities">三个可量化的能力</a></li>
+      <li><a href="#carrier">产品载体</a></li>
+      <li><a href="#modules">业务模块</a></li>
+      <li><a href="#architecture">整体架构</a></li>
+      <li><a href="#flow">双通道链路</a></li>
     </ul>
-    <h4>对照评测</h4>
-    <ul>
-      <li>
-        <a href="/docs/comparison">三种架构对照</a>
-        <ul class="nav-sub">
-          <li><a href="/docs/comparison#chains">调用链路</a></li>
-          <li><a href="/docs/comparison#selection">工具选择对照</a></li>
-          <li><a href="/docs/comparison#metrics">对照指标</a></li>
-        </ul>
-      </li>
-      <li><a href="/docs/eval">评测的三种能力</a></li>
-      <li><a href="/docs/cases">固定题库</a></li>
-      <li><a href="/docs/results">评测结果</a></li>
-    </ul>
-  </nav>
+    <div class="side-foot">数据全部来自真实运行工件<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
   <main class="docs-main">
-    <div class="crumb-inline">文档 <span>/</span> 架构概览</div>
-    <h1>架构概览</h1>
-    <p class="lead">这不是一个对话产品。Sentinel 是一个以「可量化可靠性」为主题的 Agent 引擎：把 LLM tool-calling 循环工程化——<strong>模型提议，代码裁决</strong>；效果用同一题库对三种编排形态的机械评测来量化，而不是靠演示印象。</p>
-    <div class="page-toc">
-      <a href="#thesis">核心主张</a>
-      <a href="#capabilities">三个可量化的能力</a>
-      <a href="#carrier">产品载体</a>
-      <a href="#modules">业务模块</a>
-      <a href="#architecture">整体架构</a>
-      <a href="#flow">双通道链路</a>
-    </div>
+    <section class="hero">
+      <p class="hero-kicker">TOUCHSTONE · AGENT 编排模式对照实证平台</p>
+      <h1>模型提议，代码裁决</h1>
+      <p class="hero-lead">不宣称哪种编排模式更好，只提供检验成色的装置：同一题库、同一 LLM、同一份数据，对照<strong>裸 tool calling</strong>、<strong>LangGraph 官方 ReAct</strong> 与<strong>完整工程模式</strong>三种编排形态，量化工具选择、幻觉抑制与权限拦截的差异。全部指标由代码断言产生，无 LLM 判官。</p>
+      <div class="hero-actions">
+        <a class="btn" href="/docs/results">查看评测结果</a>
+        <a class="btn ghost" href="/docs/comparison">三种架构链路</a>
+        <a class="btn ghost" href="/docs/cases">18 题固定题库</a>
+      </div>
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-card">
+          <div class="stat-label">工具选择准确率</div>
+          <div class="stat-vals"><span class="stat-now">—</span></div>
+          <div class="stat-hint">等待评测数据</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">数字幻觉率</div>
+          <div class="stat-vals"><span class="stat-now">—</span></div>
+          <div class="stat-hint">等待评测数据</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">越权泄漏率</div>
+          <div class="stat-vals"><span class="stat-now">—</span></div>
+          <div class="stat-hint">等待评测数据</div>
+        </div>
+      </div>
+      <p class="stat-note" id="statNote">指标卡读取最近一次评测的 <code>report.json</code>（裸 tool calling 基线 → 完整工程模式），数字来自真实运行，不手贴。</p>
+    </section>
 
     <h2 id="thesis">核心主张：模型提议，代码裁决</h2>
     <div class="doc-grid">
@@ -115,6 +118,7 @@
 
     <h2 id="carrier">产品载体：主动式持仓看护 Agent</h2>
     <p>引擎的第一个应用是 watch-first 的持仓看护：事件驱动主动解读，推送带证据链与审计码的结构化通知；分析能力以固定分析用例提供（预设台词、单次运行、真实循环）。只读红线：不做交易、不出具投资适当性结论；不提供自由对话入口。</p>
+    <p>完整系统（看护环、Java 数据面、记忆服务、部署编排）见仓库 <code>main</code> 分支；本站聚焦对照实验的展示面。</p>
     <div class="flow">事件源（价格阈值 / 晨报 / 演示注入）
   → WatchEvent（幂等落库）
   → 唤醒组装（持仓 + 画像 + 目标记忆）
@@ -126,65 +130,52 @@
     <h2 id="modules">业务模块</h2>
     <div class="doc-grid">
       <div class="doc-card">
-        <span class="mod-tag">FRONTEND</span>
-        <h3>sentinel-console</h3>
-        <p>文档站 <code>/</code>（即本页）。看护与分析用例演示页不进入公开导航。浏览器只访问同源 <code>/api/</code>。</p>
+        <span class="mod-tag">EVAL</span>
+        <h3>tests/eval</h3>
+        <p>对照 runner：18 题固定题库 × 三组编排 × 可复判官；报告落 <code>report.json</code> 供本站渲染。</p>
       </div>
       <div class="doc-card">
         <span class="mod-tag">ENGINE</span>
-        <h3>sentinel-engine</h3>
-        <p>看护环（事件源 / 唤醒 / 通知）与固定分析用例（Agent 循环 / SSE）；统一工具目录与治理中间件。</p>
+        <h3>engine + guardrails</h3>
+        <p>Agent 循环、语义快路径、scoped | search 工具装载、G1–G7 治理中间件、输出护栏——被测 treatment 系统。</p>
       </div>
       <div class="doc-card">
-        <span class="mod-tag">DATA</span>
-        <h3>sentinel-data</h3>
-        <p>认证、持仓与画像、运行索引、任务与 Registry；引擎不直连业务库。</p>
+        <span class="mod-tag">TOOLS</span>
+        <h3>tools + registry</h3>
+        <p>ToolCard 统一目录（重名 / 交易语义 / 只读三关）与资格真源；对引擎与基线同等暴露。</p>
       </div>
       <div class="doc-card">
-        <span class="mod-tag">MEMORY</span>
-        <h3>sentinel-memory</h3>
-        <p>L3 语义记忆（Remote Memory Service）；召回失败视为空结果，不阻塞应答。</p>
+        <span class="mod-tag">CONSOLE</span>
+        <h3>sentinel-console</h3>
+        <p>本展示站：纯静态、零后端依赖，证据页面消费真实运行产物。</p>
       </div>
     </div>
 
-    <h3>模块边界</h3>
+    <h3>对照实验的可信度约定</h3>
     <table>
-      <tr><th>模块</th><th>负责</th><th>不负责</th></tr>
-      <tr><td>Engine</td><td>Agent 循环、治理裁决、SSE、看护唤醒</td><td>直连业务库；交易执行</td></tr>
-      <tr><td>Data Plane</td><td>身份、用户事实、持久化、内部 API</td><td>自然语言研判</td></tr>
-      <tr><td>Memory</td><td>L3 候选入库与召回</td><td>业务事实真源</td></tr>
-      <tr><td>Console</td><td>文档站、Block 渲染、同源代理</td><td>服务端状态</td></tr>
+      <tr><th>约定</th><th>说明</th></tr>
+      <tr><td>同一题库</td><td>18 题固定题库，覆盖闲聊 / 知识 / 拦截 / 金融研究 / 组合 / 适合度 / 多轮指代</td></tr>
+      <tr><td>同一数据</td><td>canned 工具观察，三组共用，隔离执行质量差异</td></tr>
+      <tr><td>代码判官</td><td>全部指标由确定性断言产生（成功执行集相等 / 数字接地 / 违规语义扫描）</td></tr>
+      <tr><td>失败样本保留</td><td>失败工件原样归档，不挑选、不删改</td></tr>
     </table>
 
     <h2 id="architecture">整体架构</h2>
     <p>单一执行引擎，双通道驱动：差异仅在输入契约（WatchEvent vs 预设用例）、上下文组装与输出形态（结构化通知 vs 流式分析响应）。</p>
-    <div class="flow">Console (Nginx / dev-server)
-  → Python Engine（watch / AgentLoop / governance）
+    <div class="flow">Console (静态展示站)
+  → Python Engine（AgentLoop / governance / 装载）
   → ToolCard 本地工具 + MCP
   → Observation → ResultBlock / 通知
-  → SSE / REST
-  ← Java Data Plane（JWT / 持仓 / 运行投影）
-  ← Memory Service（L3 recall）</div>
-
-    <h3>生产单元</h3>
-    <table>
-      <tr><th>单元</th><th>角色</th></tr>
-      <tr><td>Console :8082</td><td>静态前端 + 同源代理</td></tr>
-      <tr><td>Engine :8090</td><td>看护环 + 分析用例运行</td></tr>
-      <tr><td>Data :8081</td><td>认证与业务持久化</td></tr>
-      <tr><td>Memory :8091</td><td>L3 语义记忆</td></tr>
-      <tr><td>PostgreSQL</td><td>runtime / registry / financial / watch / memory schema</td></tr>
-    </table>
-    <div class="note"><strong>边界：</strong>公网只暴露边缘 Nginx。Python、Java、记忆与数据库走内网。演示注入仅在 <code>BDLH_DEMO_MODE=true</code> 时注册。</div>
+  → 对照 runner（baseline | react | treatment）→ report.json → 本站</div>
+    <div class="note"><strong>边界：</strong>展示站无后端依赖、无交互输入；评测与引擎在本仓库 <code>sentinel-engine/</code> 内闭环复现。</div>
 
     <h2 id="flow">双通道链路</h2>
-    <h3>看护环（事件驱动）</h3>
+    <h3>看护环（事件驱动，main 分支）</h3>
     <div class="flow">WatchEvent（价格阈值 / 晨报 / demo_inject）
   → 幂等落库（dedupe_key）
   → 唤醒组装器 + scene_wakeup
   → Agent 解读
-  → 通知落库（证据 / 审计码 / 演示水印）
-  → SSE notification → 时间线</div>
+  → 通知落库（证据 / 审计码 / 演示水印）</div>
 
     <h3>分析用例（用户点选）</h3>
     <div class="flow">预设用例台词
@@ -192,13 +183,55 @@
   → bind_tools + 治理中间件
   → token / tool.step / response.final
   → ResultBlock + 证据链上屏</div>
-    <div class="note"><strong>无对话入口：</strong>会话式流式管线保留为引擎内部能力（分析用例运行复用），前端不提供自由对话页面。</div>
+    <div class="note"><strong>无对话入口：</strong>不提供自由对话页面；评测输入即固定题库，输出即证据工件。</div>
   </main>
 </div>
+<script src="/docs/docs.js"></script>
 <script>
-  document.getElementById("menuBtn").addEventListener("click", () => {
-    document.getElementById("docsNav").classList.toggle("open");
+(function () {
+  "use strict";
+  var METRICS = [
+    { label: "工具选择准确率", field: "tool_selection_rate", better: "high" },
+    { label: "数字幻觉率", field: "number_hallucination_rate", better: "low" },
+    { label: "越权泄漏率", field: "forbidden_leak_rate", better: "low" }
+  ];
+  function pct(v) { return v == null ? "—" : Math.round(v * 100) + "%"; }
+  function esc(t) {
+    return String(t == null ? "" : t).replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+    });
+  }
+  fetch("/docs/report.json", { cache: "no-store" }).then(function (res) {
+    if (!res.ok) throw new Error("no report");
+    return res.json();
+  }).then(function (data) {
+    var groups = data.groups || {};
+    var base = groups.baseline || {};
+    var full = groups.treatment || {};
+    var grid = document.getElementById("statGrid");
+    grid.innerHTML = METRICS.map(function (m) {
+      var b = base[m.field], t = full[m.field];
+      var badge = "";
+      if (b != null && t != null) {
+        var delta = Math.round((t - b) * 100);
+        var good = m.better === "high" ? delta > 0 : delta < 0;
+        var cls = delta === 0 ? "flat" : good ? "good" : "bad";
+        var mark = delta === 0 ? "持平" : (delta > 0 ? "+" : "") + delta + "pp" + (good ? " 改善" : " 回归");
+        badge = ' <span class="delta ' + cls + '">' + mark + "</span>";
+      }
+      return '<div class="stat-card"><div class="stat-label">' + m.label + "</div>" +
+        '<div class="stat-vals"><span class="stat-base">基线 ' + pct(b) + '</span><span class="stat-arrow">→</span><span class="stat-now">' + pct(t) + "</span>" + badge + "</div>" +
+        '<div class="stat-hint">完整工程模式 vs 裸 tool calling</div></div>';
+    }).join("");
+    var note = document.getElementById("statNote");
+    note.innerHTML = "指标卡读取最近一次评测（" + esc(data.generated_at || "") + " · " + esc(data.model || "") +
+      " · " + esc(data.case_count || "") + " 题 × " + esc(data.runs_per_case || "") +
+      " 次）的 <code>report.json</code>，数字来自真实运行，不手贴。<a href=\"/docs/results\">完整总表 →</a>";
+  }).catch(function () {
+    document.getElementById("statNote").innerHTML =
+      "尚未生成评测数据：在 <code>sentinel-engine/</code> 下运行 <code>LLM_API_KEY=xxx uv run python -m tests.eval.ab_eval --runs 5</code> 后本页自动刷新。";
   });
+})();
 </script>
 </body>
 </html>

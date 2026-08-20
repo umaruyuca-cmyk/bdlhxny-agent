@@ -4,63 +4,50 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>三种架构对照 · Sentinel</title>
+<title>三种架构对照 · Touchstone</title>
 <link rel="stylesheet" href="/docs/docs.css">
 </head>
 <body>
-<div class="docs-top">
-  <a class="brand" href="/"><em>グリッドユニバース研究所</em> · Sentinel 文档</a>
-  <button class="docs-menu-btn" id="menuBtn" type="button">目录</button>
-</div>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/docs/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="页面导航">
+      <a href="/docs/">概览</a>
+      <details class="topnav-group">
+        <summary>对照实验</summary>
+        <div class="topnav-menu">
+          <a href="/docs/comparison">三种架构对照</a>
+          <a href="/docs/eval">评测口径</a>
+          <a href="/docs/cases">固定题库</a>
+          <a href="/docs/results">评测结果</a>
+        </div>
+      </details>
+      <details class="topnav-group">
+        <summary>引擎架构</summary>
+        <div class="topnav-menu">
+          <a href="/docs/agents">Agent 循环</a>
+          <a href="/docs/skill">工具目录与治理</a>
+          <a href="/docs/tools">工具清单</a>
+        </div>
+      </details>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
 <div class="docs-layout">
-  <nav class="docs-nav" id="docsNav">
-    <h4>架构</h4>
+  <aside class="docs-side" id="docsSide">
+    <h4>本页目录</h4>
     <ul>
-      <li>
-        <a href="/docs/">架构概览</a>
-        <ul class="nav-sub">
-          <li><a href="/docs/#modules">业务模块</a></li>
-          <li><a href="/docs/#architecture">整体架构</a></li>
-          <li><a href="/docs/#flow">双通道链路</a></li>
-        </ul>
-      </li>
-      <li>
-        <a href="/docs/agents">Agent 循环</a>
-        <ul class="nav-sub">
-          <li><a href="/docs/agents#channels">双通道</a></li>
-          <li><a href="/docs/agents#loop">Agent 循环</a></li>
-          <li><a href="/docs/agents#loading">scoped / search</a></li>
-          <li><a href="/docs/agents#sse">SSE 输出</a></li>
-        </ul>
-      </li>
-      <li>
-        <a href="/docs/skill">工具目录与治理</a>
-        <ul class="nav-sub">
-          <li><a href="/docs/skill#toolcard">ToolCard</a></li>
-          <li><a href="/docs/skill#governance">G1–G7</a></li>
-          <li><a href="/docs/skill#constraints">C-1 / C-2</a></li>
-          <li><a href="/docs/skill#mcp">本地工具 + MCP</a></li>
-        </ul>
-      </li>
-      <li><a href="/docs/tools">工具清单</a></li>
+      <li><a href="#chains">调用链路</a></li>
+      <li><a href="#selection">工具选择机制对照</a></li>
+      <li><a href="#metrics">对照指标</a></li>
+      <li><a href="#setup">实验设置</a></li>
+      <li><a href="#repro">如何复现</a></li>
     </ul>
-    <h4>对照评测</h4>
-    <ul>
-      <li>
-        <a href="/docs/comparison" class="active">三种架构对照</a>
-        <ul class="nav-sub">
-          <li><a href="#chains">调用链路</a></li>
-          <li><a href="#selection">工具选择对照</a></li>
-          <li><a href="#metrics">对照指标</a></li>
-        </ul>
-      </li>
-      <li><a href="/docs/eval">评测的三种能力</a></li>
-      <li><a href="/docs/cases">固定题库</a></li>
-      <li><a href="/docs/results">评测结果</a></li>
-    </ul>
-  </nav>
+    <div class="side-foot">数据全部来自真实运行工件<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
   <main class="docs-main">
-    <a class="back-link" href="/docs/">← 文档中心</a>
     <h1>三种架构对照</h1>
     <p class="lead">同一题库、同一 LLM、同一份数据，唯一变量是编排形态。本页逐一给出三种形态的完整调用链路与工具选择机制；对照回答一个问题：Agent 工程模式的价值，相对「大家都会写的第一版」和「框架默认形态」到底有多大、来自哪里。</p>
     <div class="page-toc">
@@ -211,10 +198,6 @@
     <p>能力维度的判定口径见 <a href="/docs/eval">评测的三种能力</a>。</p>
   </main>
 </div>
-<script>
-  document.getElementById("menuBtn").addEventListener("click", () => {
-    document.getElementById("docsNav").classList.toggle("open");
-  });
-</script>
+<script src="/docs/docs.js"></script>
 </body>
 </html>
