@@ -23,7 +23,7 @@ sentinel-engine/            对照实验引擎（Python 3.11+ / LangGraph）
 └─ tests/                   内核单测（循环/装载/治理/纯净度门禁）
 
 sentinel-console/           /docs/ 纯静态展示站（架构、对照、题库、结果）
-docs/                       设计真源（00 被测系统规格 / 01 证据展示体系）+ 评测报告归档
+docs/                       Touchstone 目标设计（README + 产品目标 / 系统架构 / 压缩 / 评测 / 实施计划）
 ```
 
 ## 运行对照实验
@@ -36,7 +36,7 @@ uv run python -m tests.eval.ab_eval --runs 5            # 裸调用 vs 完整模
 uv run python -m tests.eval.ab_eval --runs 5 --with-react   # 加 LangGraph 官方 ReAct 组
 ```
 
-评测报告归档于 [`docs/eval/`](docs/eval/)；固定题库与判官口径见 `tests/eval/ab_eval.py`。
+评测机器可读结果落 `sentinel-console/public/docs/report.json`（展示站消费）；固定题库与判官口径见 `tests/eval/ab_eval.py`。
 
 ## 门禁
 
@@ -50,12 +50,10 @@ cd sentinel-console; npm test
 ## 与 main 分支的关系
 
 - `main`：Sentinel 完整系统（看护环、Java 数据面、记忆服务、检索封装、部署编排）
-- `touchstone`：对照实验切片（本分支）——被测 treatment 系统的规格见
-  [docs/architecture/00-Sentinel产品设计与架构.md](docs/architecture/00-Sentinel产品设计与架构.md)，
-  证据展示体系设计见 [docs/architecture/01-证据展示与演示体系设计.md](docs/architecture/01-证据展示与演示体系设计.md)。
+- `touchstone`：对照实验切片（本分支）——目标设计见 [docs/README.md](docs/README.md)（Touchstone 设计文档：产品目标、系统架构、上下文压缩、评测与证据展示、实施计划）
 
 ## 已知问题（评测本身的 bug，修复后再产出工件）
 
-- 2026-08-20 报告（`docs/eval/`）中 9/15 题因 LLM 429 限流两组全挂，携带零信息；
+- 2026-08-20 报告中 9/15 题因 LLM 429 限流两组全挂，携带零信息；
 - 语义快路径把部分 research 题误路由为直答（平均轮次 1.1→0.1 即证据），待修阈值；
 - 归因表存在过度归因（0%→0% 列为改善），应只保留数据支撑的结论。
