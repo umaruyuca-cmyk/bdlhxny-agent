@@ -11,7 +11,8 @@ engine/  私有运行 API、Agent 对照运行器、上下文构建与评测
 data/    固定题库、版本、批次、运行、上下文明细和评测结果
 web/     公开静态结果站；浏览不会调用模型
 deploy/  本地、云端和纯公开站三种 Compose 配置
-docs/    当前产品、架构、上下文和验收设计
+docs/    按产品、架构、上下文、评测、展示和开发实施分类的设计文档
+db/      PostgreSQL 总体设计、手动初始化和变更脚本、查询示例
 ```
 
 PostgreSQL 是唯一数据库。当前不需要向量数据库：固定问题和上下文都按明确编号、版本和来源读取，不做开放式语义检索。以后只有出现大量非结构化资料检索需求时，才单独评估 pgvector。
@@ -21,12 +22,20 @@ PostgreSQL 是唯一数据库。当前不需要向量数据库：固定问题和
 ```powershell
 Copy-Item deploy/.env.example deploy/.env
 # 填写 deploy/.env 中的数据库、服务令牌和模型密钥
-docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d postgres
+```
+
+数据库不会由 Data 服务自动初始化。首次启动必须按照
+[`db/postgresql/setup/README.md`](db/postgresql/setup/README.md) 手动执行四份 SQL，
+确认完成后再启动应用：
+
+```powershell
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build data engine web
 ```
 
 - 私有运行 API：`http://127.0.0.1:8090`
 - 公开展示：`http://127.0.0.1:8082/docs/`
-- 运行接口只接受固定 `case_id`，并要求 `RUN_API_TOKEN`。
+- 运行接口只接受固定 `case_id`，并要求项目所有者登录会话。
 
 只部署公开结果站：
 

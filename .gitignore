@@ -1,13 +1,3 @@
-# 历史本地配置（当前不再自动加载）
-data/src/main/resources/application-local.yml
-data/src/main/resources/application-local.properties
-
-# 旧的本地 Spring 配置文件
-data/src/main/resources/application.yml
-# 历史 Spring profile 文件，不再使用
-data/src/main/resources/application-dev.yml
-data/src/main/resources/application-prod.yml
-
 # 环境变量文件
 .env
 deploy/.env

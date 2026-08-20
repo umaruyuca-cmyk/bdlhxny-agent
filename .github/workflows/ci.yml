@@ -29,26 +29,6 @@ jobs:
   java-data:
     name: Java Data Service (tests)
     runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: touchstone_test
-          POSTGRES_USER: touchstone
-          POSTGRES_PASSWORD: touchstone
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U touchstone -d touchstone_test"
-          --health-interval 5s
-          --health-timeout 3s
-          --health-retries 20
-    env:
-      DATABASE_URL: jdbc:postgresql://127.0.0.1:5432/touchstone_test
-      DATABASE_USER: touchstone
-      DATABASE_PASSWORD: touchstone
-      DATA_INTERNAL_TOKEN: ci-data-internal-token
-      TOUCHSTONE_INTEGRATION_TEST: "true"
     defaults:
       run:
         working-directory: data

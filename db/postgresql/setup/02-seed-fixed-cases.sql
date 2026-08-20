@@ -1,3 +1,9 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '5min';
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
 INSERT INTO touchstone.case_definitions (id, title, current_version) VALUES
 ('chat-01', '固定闲聊快路径', 1),
 ('know-01', '固定知识快路径', 1),
@@ -98,7 +104,7 @@ INSERT INTO touchstone.data_snapshots
     (id, case_id, case_version, variant_id, fixture_version, content, source_hash)
 SELECT variants.case_id || ':fixture-v1', variants.case_id, variants.case_version,
        variants.variant_id, 'v1', variants.data_fixture,
-       'md5:' || md5(variants.data_fixture::text)
+       'sha256:' || encode(digest(variants.data_fixture::text, 'sha256'), 'hex')
 FROM touchstone.case_variants variants;
 
 INSERT INTO touchstone.case_steps
@@ -107,3 +113,8 @@ VALUES
 ('coref-01', 1, 1, '看看宁德时代', '{"expected_state":{"symbol":"300750"}}'),
 ('coref-01', 1, 2, '宁德时代代码300750。', '{"role":"assistant_fixture"}'),
 ('coref-01', 1, 3, '它现在什么价', '{"expected_tools":["market.get_realtime_quote"]}');
+
+INSERT INTO touchstone.database_changes (script_name, description)
+VALUES ('02-seed-fixed-cases.sql', '写入首批固定用例、变体、快照和多步输入');
+
+COMMIT;

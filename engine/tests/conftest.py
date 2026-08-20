@@ -1,6 +1,6 @@
 """测试共享 fixture：注册表快照（与种子迁移行语义一致）。
 
-生产目录真源是 Java Data Plane（根目录 `db/postgresql/seed/registry.sql`）；
+工具注册表真源由引擎 `bdlh_runtime/registry` 包定义，不依赖数据库种子；
 无 PG 的单测统一注入该快照（重写 §6.2：单测用 InMemoryRegistryStore
 插入与种子相同的行，禁止内存默认兜底进入生产路径）。
 """

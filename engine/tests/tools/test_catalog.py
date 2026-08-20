@@ -3,7 +3,7 @@
 覆盖：ToolCard 字段完整性、C-1 交易语义物理守卫、read_only 红线、
 MCP 工具代理登记、scope 可见性过滤、自 CapabilityRegistry 迁移、
 双目的 description、记忆召回伴侣工具、pydantic 参数投影。
-数据源：conftest 的 seeded registry_snapshot（与 db/postgresql/seed/registry.sql 语义一致）。
+数据源：conftest 的 seeded registry_snapshot（与引擎工具注册表种子语义一致）。
 """
 
 from __future__ import annotations

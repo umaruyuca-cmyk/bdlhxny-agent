@@ -1,4 +1,15 @@
+BEGIN;
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '5min';
+
 CREATE SCHEMA IF NOT EXISTS touchstone;
+
+CREATE TABLE touchstone.database_changes (
+    script_name         VARCHAR(200) PRIMARY KEY,
+    description         TEXT NOT NULL,
+    applied_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+    applied_by          VARCHAR(200) NOT NULL DEFAULT current_user
+);
 
 CREATE TABLE touchstone.case_definitions (
     id                  VARCHAR(100) PRIMARY KEY,
@@ -207,3 +218,8 @@ CREATE INDEX idx_runs_case ON touchstone.agent_runs(case_id, case_version, varia
 CREATE INDEX idx_context_builds_run ON touchstone.context_builds(run_id);
 CREATE INDEX idx_context_items_source ON touchstone.context_items(source_id);
 CREATE INDEX idx_run_events_run ON touchstone.run_events(run_id, sequence);
+
+INSERT INTO touchstone.database_changes (script_name, description)
+VALUES ('01-create-base-tables.sql', '创建 Touchstone 基础表、约束和索引');
+
+COMMIT;

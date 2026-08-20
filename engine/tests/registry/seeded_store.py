@@ -1,6 +1,6 @@
 """测试共享：构建与种子迁移行语义一致的 InMemoryRegistryStore。
 
-行内容必须与根目录数据库种子 ``db/postgresql/seed/registry.sql``
+行内容必须与引擎工具注册表种子定义（``bdlh_runtime/registry``）
 保持一致——本 helper 同时承担「种子语义」的回归校验职责。
 """
 
@@ -92,7 +92,7 @@ CAPABILITIES = [
     ("user.get_risk_profile", "java", True, frozenset(), {"READ_PROFILE"}, {"financial_profile_read"}),
 ]
 
-# 必填参数（与 db/postgresql/seed/registry.sql 的 required_arguments 对齐；WO-T2-1 目录迁移依赖）
+# 必填参数（与引擎工具注册表种子定义的 required_arguments 对齐；WO-T2-1 目录迁移依赖）
 REQUIRED_ARGUMENTS = {
     "market.resolve_instrument": {"symbol"},
     "market.get_realtime_quote": {"symbol"},
