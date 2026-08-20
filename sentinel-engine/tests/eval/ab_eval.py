@@ -799,9 +799,7 @@ def main(argv: list[str] | None = None) -> int:
         out.write_text(md, encoding="utf-8")
         # 机器可读结果（最近一次，覆盖写）：console /docs/results 页运行时读取
         console_json = _REPO_ROOT / "sentinel-console" / "public" / "docs" / "report.json"
-        console_json.write_text(
-            json.dumps(_report_payload(report), ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        console_json.write_text(json.dumps(_report_payload(report), ensure_ascii=False, indent=2), encoding="utf-8")
 
     # Print (fallback to UTF-8 bytes for GBK consoles)
     try:

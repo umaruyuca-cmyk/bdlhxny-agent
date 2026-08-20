@@ -26,7 +26,6 @@ from .models import (
     SkillRecord,
     ToolsetRecord,
 )
-from .remote_store import RemoteRegistryStore, create_remote_registry_store
 from .store import (
     InMemoryRegistryStore,
     RegistryStore,
@@ -39,7 +38,6 @@ __all__ = [
     "CapabilityRecord",
     "InMemoryRegistryStore",
     "OperationRecord",
-    "RemoteRegistryStore",
     "RegistrySnapshot",
     "RegistryStore",
     "SkillRecord",
@@ -47,7 +45,6 @@ __all__ = [
     "FEATURE_GATED_CAPABILITIES",
     "allowed_capabilities",
     "apply_feature_gates",
-    "create_remote_registry_store",
     "dependency_closure",
     "effective_operations",
     "eligible_capabilities",

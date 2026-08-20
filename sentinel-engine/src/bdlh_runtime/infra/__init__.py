@@ -1,14 +1,5 @@
-"""运行期配置、上下文与应用装配。"""
+"""运行期基础设施（LLM 客户端、错误契约）。
 
-from .context import RunContext
-
-__all__ = ["RunContext", "AgentRuntimeApplication", "create_application"]
-
-
-def __getattr__(name: str):
-    """按需加载 Application，避免循环导入。"""
-    if name in {"AgentRuntimeApplication", "create_application"}:
-        from .application import AgentRuntimeApplication, create_application
-
-        return {"AgentRuntimeApplication": AgentRuntimeApplication, "create_application": create_application}[name]
-    raise AttributeError(name)
+Touchstone 精简：仅保留实验对照所需的 ``infra.llm`` / ``infra.errors``；
+应用装配（application）与数据面远程客户端已随看护系统移除（见 main 分支）。
+"""

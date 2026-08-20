@@ -301,9 +301,7 @@ def report_to_dict(report: DualModeReport) -> dict[str, Any]:
             "mean_rounds": round(summary.mean_rounds, 4),
             "mean_approx_tokens": round(summary.mean_approx_tokens, 2),
             "by_category": {name: round(rate, 4) for name, rate in summary.by_category().items()},
-            "failures": [
-                {"id": item.case_id, "reason": item.reason} for item in summary.outcomes if not item.success
-            ],
+            "failures": [{"id": item.case_id, "reason": item.reason} for item in summary.outcomes if not item.success],
         }
         if summary.retrieval_hit_rate is not None:
             payload["retrieval_hit_rate"] = round(summary.retrieval_hit_rate, 4)

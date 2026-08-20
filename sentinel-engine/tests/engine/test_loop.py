@@ -120,9 +120,7 @@ async def test_text_only_is_g_beta_zero_tools(registry_snapshot):
 async def test_tool_calls_go_through_middleware_and_backfill(registry_snapshot):
     llm = FakeChatModel([_quote_call(), AIMessage(content="宁德时代最新价已从行情工具取得。")])
     loop = AgentLoop(llm=llm, catalog=catalog_from_snapshot(registry_snapshot), executor=_echo)
-    result = await loop.run(
-        AgentTurn(user_id="u1", message="宁德时代现在什么价", scene_tag="market", run_id="run-q")
-    )
+    result = await loop.run(AgentTurn(user_id="u1", message="宁德时代现在什么价", scene_tag="market", run_id="run-q"))
     assert result.entered_loop is True
     assert "行情工具" in result.answer
     assert result.audits[0].tool_name == "market.get_realtime_quote"

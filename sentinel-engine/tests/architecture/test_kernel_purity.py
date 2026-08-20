@@ -98,6 +98,5 @@ def test_kernel_module_does_not_import_domain(kernel_file: Path):
         if module == prefix or module.startswith(f"{prefix}.")
     )
     assert not violations, (
-        f"{kernel_file.relative_to(SRC_ROOT)} 违反内核纯净度："
-        f"不得依赖 {violations}。领域语义只能经通用契约传递。"
+        f"{kernel_file.relative_to(SRC_ROOT)} 违反内核纯净度：不得依赖 {violations}。领域语义只能经通用契约传递。"
     )

@@ -86,10 +86,7 @@ class NumberGroundingCheck:
         for obs in observations:
             obs_numbers |= _extract_numbers(_obs_to_text(obs))
         hallucinated = answer_numbers - obs_numbers
-        hallucinated = {
-            n for n in hallucinated
-            if not _is_trivial(n) and not _YEAR_RE.fullmatch(n)
-        }
+        hallucinated = {n for n in hallucinated if not _is_trivial(n) and not _YEAR_RE.fullmatch(n)}
         return [
             GuardViolation(
                 check_name="NUM_HALLUCINATION",
@@ -106,9 +103,20 @@ class C1ComplianceCheck:
     """answer 不得含交易执行语义（C-1）。"""
 
     _KEYWORDS = (
-        "买入", "卖出", "下单", "转账", "建议购买",
-        "立刻买入", "清仓", "建仓", "加仓", "减仓",
-        "委托买入", "委托卖出", "帮我买", "帮我卖",
+        "买入",
+        "卖出",
+        "下单",
+        "转账",
+        "建议购买",
+        "立刻买入",
+        "清仓",
+        "建仓",
+        "加仓",
+        "减仓",
+        "委托买入",
+        "委托卖出",
+        "帮我买",
+        "帮我卖",
     )
 
     def check(self, answer: str, observations: list[Any]) -> list[GuardViolation]:
@@ -129,9 +137,15 @@ class C2ComplianceCheck:
     """answer 不得含适当性结论（C-2）。"""
 
     _KEYWORDS = (
-        "适合您", "推荐持有", "建议配置",
-        "该标的适合", "适合投资", "推荐买入",
-        "建议买入", "符合您的风险", "适合你的风险",
+        "适合您",
+        "推荐持有",
+        "建议配置",
+        "该标的适合",
+        "适合投资",
+        "推荐买入",
+        "建议买入",
+        "符合您的风险",
+        "适合你的风险",
     )
 
     def check(self, answer: str, observations: list[Any]) -> list[GuardViolation]:

@@ -234,16 +234,13 @@ _DUAL_PURPOSE_DESCRIPTIONS: dict[str, str] = {
         "用于「估值高不高」「PE 多少」。检索关键词：估值、市盈率、市净率、PE、PB。"
     ),
     "market.get_industry_context": (
-        "查询标的所属行业与行业背景。"
-        "用于「这只股票是哪个行业」「同行对比」。检索关键词：行业、板块、赛道。"
+        "查询标的所属行业与行业背景。用于「这只股票是哪个行业」「同行对比」。检索关键词：行业、板块、赛道。"
     ),
     "market.get_money_flow": (
-        "查询标的资金流向。"
-        "用于「主力在买还是在卖」「资金净流入」。检索关键词：资金流、主力、净流入。"
+        "查询标的资金流向。用于「主力在买还是在卖」「资金净流入」。检索关键词：资金流、主力、净流入。"
     ),
     "market.get_news": (
-        "查询与标的相关的结构化新闻。"
-        "用于「最近有什么消息」「公司公告」。检索关键词：新闻、资讯、公告。"
+        "查询与标的相关的结构化新闻。用于「最近有什么消息」「公司公告」。检索关键词：新闻、资讯、公告。"
     ),
     "research.web_search": (
         "检索最新外部公开资料并带来源返回。"
@@ -366,11 +363,7 @@ class ToolCatalog:
         scope 标签任一命中即可见；空 ``required_scope`` 视为全场景可见。
         """
         granted = set(scopes)
-        return [
-            card
-            for card in self.list()
-            if not card.required_scope or granted.intersection(card.required_scope)
-        ]
+        return [card for card in self.list() if not card.required_scope or granted.intersection(card.required_scope)]
 
     def __len__(self) -> int:
         return len(self._cards)

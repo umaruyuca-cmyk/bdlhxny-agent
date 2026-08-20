@@ -103,8 +103,7 @@ def _extract_tokens(response: Any) -> tuple[int, int]:
 
 
 _BASELINE_SYSTEM = (
-    "你是一个金融分析助手。请根据用户问题调用合适的工具获取数据，"
-    "然后给出分析回答。不得编造未由工具提供的数据。"
+    "你是一个金融分析助手。请根据用户问题调用合适的工具获取数据，然后给出分析回答。不得编造未由工具提供的数据。"
 )
 
 
@@ -158,10 +157,12 @@ async def naive_run(
             for call_id, name, args in calls:
                 result = await executor(name, args)
                 tool_log.append((name, dict(args)))
-                messages.append(ToolMessage(
-                    content=json.dumps(result, ensure_ascii=False, default=str),
-                    tool_call_id=call_id or name,
-                ))
+                messages.append(
+                    ToolMessage(
+                        content=json.dumps(result, ensure_ascii=False, default=str),
+                        tool_call_id=call_id or name,
+                    )
+                )
     except Exception as exc:
         return BaselineResult(
             answer=f"（执行失败：{exc}）",

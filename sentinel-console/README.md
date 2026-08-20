@@ -1,33 +1,16 @@
-# sentinel-console（Sentinel 前端）
+# sentinel-console（Touchstone 展示站）
 
-独立 Nginx 静态前端，无构建工具链（原生 HTML/CSS/JS + ECharts CDN）。浏览器只访问同源 `/api/`；代理层按领域分发到 Java 数据面与 Python Agent 引擎。
+纯静态 Nginx 展示站，无构建工具链、无后端依赖：`/` 重定向到 `/docs/` 文档站（架构概览、Agent 循环、工具目录与治理、三种架构对照、评测口径、固定题库、评测结果）。
 
-> 产品形态以 [`docs/architecture/00-Sentinel产品设计与架构.md`](../docs/architecture/00-Sentinel产品设计与架构.md) §7 为准：
-> 品牌落地为 `/`。分析入口为 `/lab`（固定用例 + 真实 LLM）。`/agent` 与 `/workspace` 重定向到 `/lab`。看护首页 `/dashboard` 冻结，不再作为主路径。
-> `/skills/` 为开发遗留试用页，不在产品导航中。与设计稿的偏差见设计文档脚注。
+> Touchstone 分支只保留实验对照的展示面；Sentinel 完整前端（dashboard / lab / chat）见 `main` 分支。
 
-## 本地前后端联调
-
-先启动 Java 数据面（端口 `8081`）和 Python 引擎（端口 `8090`），再在本目录执行：
+## 本地预览
 
 ```powershell
 npm run dev
 ```
 
-本地页面：`http://127.0.0.1:8082/`
-
-开发服务器把认证和用户领域 API 代理到 Java，把聊天与会话 API 代理到 Python。如需临时连接其他服务：
-
-```powershell
-$env:BDLH_RUNTIME_BACKEND_URL="http://127.0.0.1:8081"
-$env:BDLH_RUNTIME_ANALYSIS_URL="http://127.0.0.1:8090"
-npm run dev
-```
-
-## 对接文档
-
-- [`CHAT_INTEGRATION.md`](CHAT_INTEGRATION.md) — 会话页 SSE 契约 v2（`tool.step` / `token` / `response.final`）与 ResultBlock
-- [`API_INTEGRATION.md`](API_INTEGRATION.md) — 页面路由、HTTP API 与看护通道
+打开 `http://127.0.0.1:8082/docs/`。
 
 ## 测试
 
@@ -38,13 +21,11 @@ npm test
 ## 构建和启动
 
 ```bash
-docker build -t bdlh-runtime-console:1.0.0 .
+docker build -t touchstone-console:1.0.0 .
 
 docker run -d \
-  --name bdlh-runtime-console \
+  --name touchstone-console \
   --restart unless-stopped \
   --network host \
-  bdlh-runtime-console:1.0.0
+  touchstone-console:1.0.0
 ```
-
-公网边缘 Nginx 将主域名转发到仅监听回环地址的前端容器；更新前端只需重建并替换该容器。完整域名、证书、路由与端口收口步骤见 [`deploy/DOMAIN_DEPLOYMENT.md`](../deploy/DOMAIN_DEPLOYMENT.md)。
