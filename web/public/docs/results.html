@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>评测结果 · Touchstone</title>
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/docs/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="页面导航">
+      <a href="/docs/">概览</a>
+      <details class="topnav-group">
+        <summary>对照实验</summary>
+        <div class="topnav-menu">
+          <a href="/docs/comparison">三种架构对照</a>
+          <a href="/docs/eval">评测口径</a>
+          <a href="/docs/cases">固定题库</a>
+          <a href="/docs/results">评测结果</a>
+        </div>
+      </details>
+      <details class="topnav-group">
+        <summary>引擎架构</summary>
+        <div class="topnav-menu">
+          <a href="/docs/agents">Agent 循环</a>
+          <a href="/docs/skill">工具目录与治理</a>
+          <a href="/docs/tools">工具清单</a>
+        </div>
+      </details>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#summary">总表</a></li>
+      <li><a href="#cases">分场景明细</a></li>
+    </ul>
+    <div class="side-foot">数据全部来自真实运行工件<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>评测结果</h1>
+    <p class="lead">本页读取最近一次对照评测的机器可读结果（<code>report.json</code>，由评测命令自动写入，覆盖更新）——数字不手贴，跑一次评测页面即刷新。</p>
+
+    <div id="meta"></div>
+
+    <h2 id="summary">总表</h2>
+    <div id="summaryWrap"><p class="dim" id="summaryHint">加载中…</p></div>
+
+    <h2 id="cases">分场景明细</h2>
+    <div id="casesWrap"><p class="dim" id="casesHint">加载中…</p></div>
+
+    <h2 id="lineage">数据链路（完整模式组）</h2>
+    <p class="dim">每步调用使用了哪个冻结数据、查询参数与返回摘要。三种 Agent 实现使用完全相同的数据版本。</p>
+    <div id="lineageWrap"><p class="dim" id="lineageHint">加载中…</p></div>
+
+    <div class="note" id="emptyState" style="display:none">
+      <strong>尚未生成评测数据。</strong>在仓库内运行：
+      <code>LLM_API_KEY=xxx uv run python -m bdlh_runtime.evaluation.ab_eval --runs 5</code>
+      （在 <code>engine/</code> 下执行），完成后本页自动展示三组总表与分场景明细。
+    </div>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+<script>
+  var METRICS = [
+    ["工具选择准确率", "tool_selection_rate", "pct", "high"],
+    ["幻觉工具率", "hallucination_rate", "pct", "low"],
+    ["越权泄漏率", "forbidden_leak_rate", "pct", "low"],
+    ["数字幻觉率", "number_hallucination_rate", "pct", "low"],
+    ["合规违规率(C-1)", "c1_violation_rate", "pct", "low"],
+    ["合规违规率(C-2)", "c2_violation_rate", "pct", "low"],
+    ["平均轮次", "mean_rounds", "num1", "flat"],
+    ["平均 token", "mean_tokens", "int", "flat"],
+    ["耗时 p50（ms）", "median_duration_ms", "int", "low"],
+    ["耗时 p95（ms）", "p95_duration_ms", "int", "low"]
+  ];
+  var GROUP_LABELS = { baseline: "裸 tool calling", react: "LangGraph 官方 ReAct", treatment: "完整工程模式" };
+
+  function fmt(value, kind) {
+    if (value == null) return "—";
+    if (kind === "pct") return (Math.round(value * 100)) + "%";
+    if (kind === "num1") return Number(value).toFixed(1);
+    return String(value);
+  }
+  function esc(text) {
+    return String(text == null ? "" : text).replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+    });
+  }
+  // 相对基线的差异徽标：higher-better / lower-better / 中性（轮次与 token 只报差异不下判断）
+  function deltaBadge(baseVal, val, kind, better) {
+    if (baseVal == null || val == null) return "";
+    var delta, text;
+    if (kind === "pct") {
+      delta = Math.round((val - baseVal) * 100);
+      text = (delta > 0 ? "+" : "") + delta + "pp";
+    } else {
+      delta = Math.round((val - baseVal) * 10) / 10;
+      text = (delta > 0 ? "+" : "") + delta;
+    }
+    if (delta === 0) return ' <span class="delta flat">持平</span>';
+    if (better === "flat") return ' <span class="delta flat">' + text + "</span>";
+    var good = better === "high" ? delta > 0 : delta < 0;
+    return ' <span class="delta ' + (good ? "good" : "bad") + '">' + text + (good ? " 改善" : " 回归") + "</span>";
+  }
+
+  fetch("/docs/report.json", { cache: "no-store" }).then(function (res) {
+    if (!res.ok) throw new Error("no report");
+    return res.json();
+  }).then(function (data) { render(data); }).catch(function () {
+    document.getElementById("emptyState").style.display = "";
+    document.getElementById("summaryHint").textContent = "暂无数据";
+    document.getElementById("casesHint").textContent = "暂无数据";
+  });
+
+  function render(data) {
+    var groups = data.groups || {};
+    var order = ["baseline", "react", "treatment"].filter(function (key) { return groups[key]; });
+    var base = groups.baseline || {};
+
+    var meta = document.getElementById("meta");
+    var executorLabel = "冻结工具数据（离线可复现）";
+    meta.innerHTML = "<table><tr><th>生成时间</th><th>模型</th><th>执行器</th><th>每题运行次数</th><th>题量</th></tr>" +
+      "<tr><td>" + esc(data.generated_at || "—") + "</td><td>" + esc(data.model || "—") + "</td><td>" +
+      esc(executorLabel) + "</td><td>" + esc(data.runs_per_case) + "</td><td>" + esc(data.case_count) + "</td></tr></table>";
+
+    var head = "<tr><th>指标</th>" + order.map(function (key) { return "<th>" + GROUP_LABELS[key] + "</th>"; }).join("") + "</tr>";
+    var rows = METRICS.map(function (metric) {
+      var label = metric[0], field = metric[1], kind = metric[2], better = metric[3];
+      return "<tr><td>" + label + "</td>" + order.map(function (key) {
+        var val = (groups[key] || {})[field];
+        var cell = fmt(val, kind);
+        if (key !== "baseline" && order.indexOf("baseline") > -1) {
+          cell += deltaBadge(base[field], val, kind, better);
+        }
+        return "<td>" + cell + "</td>";
+      }).join("") + "</tr>";
+    }).join("");
+    document.getElementById("summaryWrap").innerHTML = "<table>" + head + rows + "</table>";
+
+    var caseHead = "<tr><th>题号</th><th>场景</th><th>输入</th>" +
+      order.map(function (key) { return "<th>" + GROUP_LABELS[key] + " 正确 / 幻觉</th>"; }).join("") + "</tr>";
+    var caseRows = (data.cases || []).map(function (item) {
+      return "<tr><td>" + esc(item.id) + "</td><td>" + esc(item.category) + "</td><td>" + esc(item.message) + "</td>" +
+        order.map(function (key) {
+          var agg = item[key];
+          if (!agg) return "<td>—</td>";
+          return "<td>" + agg.correct + " / " + agg.total + (agg.hallucinated ? " <strong>(" + agg.hallucinated + " 幻觉)</strong>" : "") + "</td>";
+        }).join("") + "</tr>";
+    }).join("");
+    document.getElementById("casesWrap").innerHTML = "<table>" + caseHead + caseRows + "</table>";
+
+    var linRows = [];
+    (data.cases || []).forEach(function (item) {
+      (item.lineage || []).forEach(function (step, idx) {
+        linRows.push(
+          "<tr><td>" + esc(item.id) + "</td><td>" + (idx + 1) + "</td><td>" + esc(step.tool) +
+          "</td><td>" + esc(step.store) + "</td><td><code>" + esc(JSON.stringify(step.query)) +
+          "</code></td><td><code>" + esc(step.result) + "</code></td></tr>"
+        );
+      });
+    });
+    if (linRows.length) {
+      document.getElementById("lineageWrap").innerHTML =
+        "<table><tr><th>题号</th><th>#</th><th>工具</th><th>数据面</th><th>查询</th><th>返回摘要</th></tr>" +
+        linRows.join("") + "</table>";
+    } else {
+      document.getElementById("lineageHint").textContent = "暂无数据（运行评测后自动生成）";
+    }
+  }
+</script>
+</body>
+</html>

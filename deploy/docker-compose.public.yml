@@ -1,9 +1,9 @@
 name: touchstone-public
 
 services:
-  showcase:
+  web:
     build:
-      context: ../sentinel-console
+      context: ../web
       dockerfile: Dockerfile
     container_name: touchstone-showcase
     restart: unless-stopped

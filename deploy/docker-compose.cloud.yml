@@ -1,33 +1,14 @@
-name: touchstone
+name: touchstone-cloud
 
 services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-touchstone}
-      POSTGRES_USER: ${POSTGRES_USER:-touchstone}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
-    volumes:
-      - touchstone-postgres:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-touchstone} -d ${POSTGRES_DB:-touchstone}"]
-      interval: 5s
-      timeout: 3s
-      retries: 20
-
   data:
-    build:
-      context: ../data
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/data:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
-      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-touchstone}
-      DATABASE_USER: ${POSTGRES_USER:-touchstone}
-      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL is required}
+      DATABASE_USER: ${DATABASE_USER:?DATABASE_USER is required}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:?DATABASE_PASSWORD is required}
       DATA_INTERNAL_TOKEN: ${DATA_INTERNAL_TOKEN:?DATA_INTERNAL_TOKEN is required}
-    depends_on:
-      postgres:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/actuator/health"]
       interval: 10s
@@ -36,8 +17,7 @@ services:
       start_period: 30s
 
   engine:
-    build:
-      context: ../engine
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/engine:${IMAGE_TAG:-latest}
     restart: unless-stopped
     environment:
       DATA_API_BASE_URL: http://data:8080/internal/v1
@@ -46,7 +26,7 @@ services:
       LLM_API_KEY: ${LLM_API_KEY:?LLM_API_KEY is required}
       LLM_BASE_URL: ${LLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
       LLM_MODEL: ${LLM_MODEL:-glm-4.7-flash}
-      GIT_COMMIT: ${GIT_COMMIT:-local}
+      GIT_COMMIT: ${GIT_COMMIT:?GIT_COMMIT is required}
       ARTIFACTS_DIR: /app/artifacts
       MAX_CONCURRENT_BATCHES: ${MAX_CONCURRENT_BATCHES:-1}
     depends_on:
@@ -64,11 +44,10 @@ services:
       start_period: 20s
 
   web:
-    build:
-      context: ../web
+    image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
-      - "${CONSOLE_BIND:-127.0.0.1}:${CONSOLE_PORT:-8082}:8082"
+      - "${CONSOLE_BIND:-0.0.0.0}:${CONSOLE_PORT:-8082}:8082"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8082/docs/"]
       interval: 10s
@@ -76,5 +55,4 @@ services:
       retries: 8
 
 volumes:
-  touchstone-postgres:
   touchstone-artifacts:

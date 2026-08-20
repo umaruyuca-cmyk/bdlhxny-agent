@@ -1,39 +1,38 @@
-# Touchstone 部署说明
+# 部署
 
-本目录只包含当前 touchstone 分支实际具备的部署能力，不复用 main 分支的旧聊天系统编排。
+## 本地完整环境
 
-## 两种部署边界
+包含 PostgreSQL、`data`、`engine` 和 `web`：
 
-### 公开展示
-
-公开环境只部署 sentinel-console。它读取静态展示数据，不连接模型、数据服务或记忆服务，访问页面不会产生 token 消耗。
-
-~~~powershell
-docker compose -f deploy/docker-compose.public.yml up -d --build
-~~~
-
-### 私有运行依赖
-
-私有环境需要 PostgreSQL、RocketMQ、sentinel-data 和 sentinel-memory，为后续固定用例运行 API 提供数据快照和长期记忆。
-
-~~~powershell
+```powershell
 Copy-Item deploy/.env.example deploy/.env
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
-~~~
+```
 
-当前 sentinel-engine 仍是评测和上下文算法库，尚未实现只接受 case_id 的私有运行 API，因此不放入 Compose。等 docs/05 的阶段 5 完成后再增加 engine 服务，不能恢复旧的任意聊天 API。
+Engine 端口默认只绑定 `127.0.0.1`。如果通过网关提供私有运行页面，网关仍需做项目所有者登录；`RUN_API_TOKEN` 是第二层后端保护，不应暴露给浏览器或公开站。
 
-## 安全要求
+## 云环境
 
-- deploy/.env 只保存在本地，不提交 Git；
-- 所有对外端口默认绑定 127.0.0.1；
-- 公开 Compose 不包含数据库、消息队列、模型密钥或运行后端；
-- 示例密码只用于本地开发，正式环境必须替换；
-- 数据库首次初始化后，修改密码变量不会自动修改已有数据卷中的角色密码。
+`docker-compose.cloud.yml` 使用已经发布的三个镜像，并连接托管 PostgreSQL：
 
-## 配置校验
+```powershell
+docker compose --env-file deploy/.env.cloud -f deploy/docker-compose.cloud.yml up -d
+```
 
-~~~powershell
+云环境需要设置 `IMAGE_REGISTRY`、`IMAGE_TAG`、`DATABASE_URL`、`DATABASE_USER`、`DATABASE_PASSWORD`、`DATA_INTERNAL_TOKEN`、`RUN_API_TOKEN`、`LLM_API_KEY` 和 `GIT_COMMIT`。数据服务和运行服务应放在私有网络；只让展示站或经过登录保护的反向代理暴露公网端口。
+
+## 纯公开展示
+
+```powershell
+docker compose -f deploy/docker-compose.public.yml up -d --build
+```
+
+这个配置只有静态 Nginx，不含数据库、模型密钥、数据服务或运行 API，因此访问页面不会产生 token 消耗。
+
+## 配置检查
+
+```powershell
 docker compose --env-file deploy/.env.ci -f deploy/docker-compose.yml config -q
+docker compose --env-file deploy/.env.ci -f deploy/docker-compose.cloud.yml config -q
 docker compose -f deploy/docker-compose.public.yml config -q
-~~~
+```
