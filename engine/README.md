@@ -32,11 +32,12 @@ uv run python -m bdlh_runtime.evaluation.ab_eval --runs 5
 ## 私有 API
 
 ```powershell
-$env:RUN_API_TOKEN = "..."
 $env:DATA_INTERNAL_TOKEN = "..."
 $env:DATA_API_BASE_URL = "http://127.0.0.1:8080/internal/v1"
 uv run uvicorn bdlh_runtime.run_api:app --host 127.0.0.1 --port 8090
 ```
+
+运行接口通过账号会话鉴权：先 `POST /api/v1/login` 获取令牌，再携带 `Authorization: Bearer <token>` 调用其它接口。
 
 创建批次：`POST /api/v1/eval-batches`。请求只允许 `case_ids`、`runs`、`include_react` 和 `model`；额外字段会被拒绝。
 

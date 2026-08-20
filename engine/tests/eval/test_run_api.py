@@ -25,6 +25,11 @@ class FakeDataClient:
     def get_batch(self, batch_id: str) -> dict[str, Any]:
         return {"id": batch_id, "status": "COMPLETE", "runs": []}
 
+    def verify_session(self, token: str) -> dict[str, Any] | None:
+        if token == "test-token":
+            return {"accountId": "owner", "username": "owner"}
+        return None
+
     def create_run(self, payload: dict[str, Any]) -> str:
         self.created_runs.append(payload)
         return f"run-{len(self.created_runs)}"
@@ -49,8 +54,7 @@ def fake_data(monkeypatch: pytest.MonkeyPatch) -> FakeDataClient:
 
 
 @pytest.fixture()
-def client(monkeypatch: pytest.MonkeyPatch, fake_data: FakeDataClient) -> TestClient:
-    monkeypatch.setenv("RUN_API_TOKEN", "test-token")
+def client(fake_data: FakeDataClient) -> TestClient:
     return TestClient(run_api.app)
 
 
@@ -60,9 +64,8 @@ def test_health_is_public(client: TestClient) -> None:
     assert response.json()["service"] == "touchstone-run-api"
 
 
-def test_fail_closed_without_owner_token(client: TestClient, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("RUN_API_TOKEN")
-    assert client.get("/api/v1/cases").status_code == 503
+def test_requires_session_token(client: TestClient) -> None:
+    assert client.get("/api/v1/cases").status_code == 401
 
 
 def test_cases_are_read_from_data_service(client: TestClient) -> None:

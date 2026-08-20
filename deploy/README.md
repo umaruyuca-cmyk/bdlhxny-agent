@@ -6,20 +6,29 @@
 
 ```powershell
 Copy-Item deploy/.env.example deploy/.env
-docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d postgres
 ```
 
-Engine 端口默认只绑定 `127.0.0.1`。如果通过网关提供私有运行页面，网关仍需做项目所有者登录；`RUN_API_TOKEN` 是第二层后端保护，不应暴露给浏览器或公开站。
+第一次部署时，按照 [`db/postgresql/setup/README.md`](../db/postgresql/setup/README.md)
+手动执行四份数据库初始化 SQL。数据库准备完成后再启动应用：
+
+```powershell
+docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build data engine web
+```
+
+Engine 端口默认只绑定 `127.0.0.1`。如果通过网关提供私有运行页面，网关仍需做项目所有者登录；运行接口本身已要求账号会话令牌，不应暴露给浏览器或公开站。
 
 ## 云环境
 
-`docker-compose.cloud.yml` 使用已经发布的三个镜像，并连接托管 PostgreSQL：
+`docker-compose.cloud.yml` 使用已经发布的三个镜像，并连接托管 PostgreSQL。先使用
+`psql` 按 [`db/postgresql/setup/README.md`](../db/postgresql/setup/README.md) 初始化托管数据库，
+然后启动服务：
 
 ```powershell
 docker compose --env-file deploy/.env.cloud -f deploy/docker-compose.cloud.yml up -d
 ```
 
-云环境需要设置 `IMAGE_REGISTRY`、`IMAGE_TAG`、`DATABASE_URL`、`DATABASE_USER`、`DATABASE_PASSWORD`、`DATA_INTERNAL_TOKEN`、`RUN_API_TOKEN`、`LLM_API_KEY` 和 `GIT_COMMIT`。数据服务和运行服务应放在私有网络；只让展示站或经过登录保护的反向代理暴露公网端口。
+云环境需要设置 `IMAGE_REGISTRY`、`IMAGE_TAG`、`DATABASE_URL`、`DATABASE_USER`、`DATABASE_PASSWORD`、`DATA_INTERNAL_TOKEN`、`LLM_API_KEY` 和 `GIT_COMMIT`。数据服务和运行服务应放在私有网络；只让展示站或经过登录保护的反向代理暴露公网端口。
 
 ## 纯公开展示
 

@@ -12,10 +12,10 @@ import os
 import threading
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
 from uuid import uuid4
 
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from bdlh_runtime.data_client import DataClient, DataServiceError
@@ -28,12 +28,26 @@ _JOBS: dict[str, dict[str, Any]] = {}
 _BATCH_SLOTS = threading.BoundedSemaphore(max(1, int(os.getenv("MAX_CONCURRENT_BATCHES", "1"))))
 
 
-def _require_token(authorization: str | None) -> None:
-    token = os.getenv("RUN_API_TOKEN", "").strip()
-    if not token:
-        raise HTTPException(status_code=503, detail="RUN_API_TOKEN 未配置，运行接口关闭")
-    if authorization != f"Bearer {token}":
-        raise HTTPException(status_code=401, detail="令牌无效")
+def require_login(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    token = _bearer_token(authorization)
+    if token is None:
+        raise HTTPException(status_code=401, detail="未提供会话令牌")
+    try:
+        account = _data().verify_session(token)
+    except DataServiceError:
+        raise HTTPException(status_code=503, detail="数据服务不可用") from None
+    if account is None:
+        raise HTTPException(status_code=401, detail="会话无效或已过期")
+    return account
+
+
+def _bearer_token(authorization: str | None) -> str | None:
+    if not authorization:
+        return None
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        return None
+    return token.strip()
 
 
 def _data() -> DataClient:
@@ -47,6 +61,13 @@ class EvalBatchRequest(BaseModel):
     runs: int = Field(default=1, ge=1, le=5, description="每题每种实现的重复次数")
     include_react: bool = Field(default=True, description="是否包含 LangGraph ReAct 实现")
     model: str = Field(default="glm-4.7-flash", min_length=1, max_length=100)
+
+
+class LoginRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
 
 
 @app.get("/health")
@@ -63,9 +84,36 @@ def ready() -> dict[str, Any]:
     return {"status": "ready", "case_count": count}
 
 
+@app.post("/api/v1/login")
+def login(request: LoginRequest, http_request: Request) -> dict[str, Any]:
+    client_ip = http_request.client.host if http_request.client else None
+    user_agent = http_request.headers.get("user-agent")
+    try:
+        result = _data().login(
+            username=request.username,
+            password=request.password,
+            ip_address=client_ip,
+            user_agent=user_agent,
+        )
+    except DataServiceError as exc:
+        raise HTTPException(status_code=exc.status_code or 401, detail=str(exc)) from exc
+    return {"token": result["token"], "expires_at": result["expiresAt"]}
+
+
+@app.post("/api/v1/logout")
+def logout(authorization: str | None = Header(default=None)) -> dict[str, str]:
+    token = _bearer_token(authorization)
+    if token is None:
+        raise HTTPException(status_code=401, detail="未提供会话令牌")
+    try:
+        _data().logout(token)
+    except DataServiceError:
+        raise HTTPException(status_code=503, detail="数据服务不可用") from None
+    return {"status": "ok"}
+
+
 @app.get("/api/v1/cases")
-def list_cases(authorization: str | None = Header(default=None)) -> list[dict[str, Any]]:
-    _require_token(authorization)
+def list_cases(account: Annotated[dict[str, Any], Depends(require_login)]) -> list[dict[str, Any]]:
     try:
         return _data().list_cases()
     except DataServiceError as exc:
@@ -73,8 +121,10 @@ def list_cases(authorization: str | None = Header(default=None)) -> list[dict[st
 
 
 @app.post("/api/v1/eval-batches")
-def start_eval_batch(request: EvalBatchRequest, authorization: str | None = Header(default=None)) -> dict[str, str]:
-    _require_token(authorization)
+def start_eval_batch(
+    request: EvalBatchRequest,
+    account: Annotated[dict[str, Any], Depends(require_login)],
+) -> dict[str, str]:
     data = _data()
     try:
         catalog = data.list_cases()
@@ -132,8 +182,7 @@ def start_eval_batch(request: EvalBatchRequest, authorization: str | None = Head
 
 
 @app.get("/api/v1/jobs/{job_id}")
-def get_job(job_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    _require_token(authorization)
+def get_job(job_id: str, account: Annotated[dict[str, Any], Depends(require_login)]) -> dict[str, Any]:
     job = _JOBS.get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="作业不存在；已完成的运行记录请从数据服务读取")
@@ -141,8 +190,7 @@ def get_job(job_id: str, authorization: str | None = Header(default=None)) -> di
 
 
 @app.get("/api/v1/batches/{batch_id}")
-def get_batch(batch_id: str, authorization: str | None = Header(default=None)) -> dict[str, Any]:
-    _require_token(authorization)
+def get_batch(batch_id: str, account: Annotated[dict[str, Any], Depends(require_login)]) -> dict[str, Any]:
     try:
         return _data().get_batch(batch_id)
     except DataServiceError as exc:
