@@ -1,0 +1,56 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "showcase-data index（实证层入口索引）",
+  "description": "首页只展示最新有效批次；latest_batch 记录最近发布批次及其门槛状态。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["generated_at", "formal_batches", "latest_batch"],
+  "properties": {
+    "generated_at": { "type": "string", "minLength": 1 },
+    "formal_batches": {
+      "type": "array",
+      "items": { "$ref": "#/definitions/batchRef" }
+    },
+    "latest_batch": { "$ref": "#/definitions/latestBatch" }
+  },
+  "definitions": {
+    "latestBatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["batch_id", "published_at", "is_formal", "case_count", "runs_per_case", "model", "git_commit", "validity_gate"],
+      "properties": {
+        "batch_id": { "type": "string", "minLength": 1 },
+        "published_at": { "type": "string", "minLength": 1 },
+        "is_formal": { "type": "boolean" },
+        "case_count": { "type": "integer", "minimum": 0 },
+        "runs_per_case": { "type": "integer", "minimum": 0 },
+        "model": { "type": "string", "minLength": 1 },
+        "git_commit": { "type": "string", "minLength": 1 },
+        "validity_gate": { "$ref": "#/definitions/validityGate" }
+      }
+    },
+    "batchRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["batch_id", "published_at", "is_formal", "case_count", "runs_per_case", "model", "git_commit"],
+      "properties": {
+        "batch_id": { "type": "string", "minLength": 1 },
+        "published_at": { "type": "string", "minLength": 1 },
+        "is_formal": { "type": "boolean" },
+        "case_count": { "type": "integer", "minimum": 0 },
+        "runs_per_case": { "type": "integer", "minimum": 0 },
+        "model": { "type": "string", "minLength": 1 },
+        "git_commit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "validityGate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["met", "reason"],
+      "properties": {
+        "met": { "type": "boolean" },
+        "reason": { "type": "string" }
+      }
+    }
+  }
+}

@@ -1,0 +1,111 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "showcase-data batch-report（批次报告）",
+  "description": "对应评测文档 §10 批次报告：固定条件、每组有效/无效、五类结局计数、全量案例与运行下钻。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["batch_id", "experiment_type", "generated_at", "git_commit", "model", "fixed_conditions", "groups", "outcome_counts", "cases"],
+  "properties": {
+    "batch_id": { "type": "string", "minLength": 1 },
+    "experiment_type": { "enum": ["agent-implementation", "context-strategy"] },
+    "generated_at": { "type": "string", "minLength": 1 },
+    "git_commit": { "type": "string", "minLength": 1 },
+    "model": { "type": "string", "minLength": 1 },
+    "fixed_conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["case_ids", "runs_per_case", "tool_data"],
+      "properties": {
+        "case_ids": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "runs_per_case": { "type": "integer", "minimum": 1 },
+        "tool_data": { "enum": ["frozen", "live"] },
+        "agent_mode": { "type": "string" },
+        "context_strategy": { "type": "string" },
+        "variable": { "type": "string", "description": "本批次唯一变量" }
+      }
+    },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "label", "valid_runs", "invalid_runs", "metrics"],
+        "properties": {
+          "key": { "type": "string", "minLength": 1 },
+          "label": { "type": "string", "minLength": 1 },
+          "valid_runs": { "type": "integer", "minimum": 0 },
+          "invalid_runs": { "type": "integer", "minimum": 0 },
+          "metrics": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["task_success_rate", "tool_selection_rate", "hallucination_rate", "forbidden_leak_rate", "number_hallucination_rate", "c1_violation_rate", "c2_violation_rate", "mean_rounds", "mean_tokens", "median_duration_ms", "p95_duration_ms"],
+            "properties": {
+              "task_success_rate": { "$ref": "#/definitions/num01" },
+              "tool_selection_rate": { "$ref": "#/definitions/num01" },
+              "hallucination_rate": { "$ref": "#/definitions/num01" },
+              "forbidden_leak_rate": { "$ref": "#/definitions/num01" },
+              "number_hallucination_rate": { "$ref": "#/definitions/num01" },
+              "c1_violation_rate": { "$ref": "#/definitions/num01" },
+              "c2_violation_rate": { "$ref": "#/definitions/num01" },
+              "mean_rounds": { "$ref": "#/definitions/num" },
+              "mean_tokens": { "$ref": "#/definitions/num" },
+              "median_duration_ms": { "$ref": "#/definitions/num" },
+              "p95_duration_ms": { "$ref": "#/definitions/num" }
+            }
+          }
+        }
+      }
+    },
+    "outcome_counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["win", "regress", "tie", "both_fail", "invalid"],
+      "properties": {
+        "win": { "$ref": "#/definitions/num" },
+        "regress": { "$ref": "#/definitions/num" },
+        "tie": { "$ref": "#/definitions/num" },
+        "both_fail": { "$ref": "#/definitions/num" },
+        "invalid": { "$ref": "#/definitions/num" }
+      }
+    },
+    "cases": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "category", "message", "groups"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "category": { "type": "string" },
+          "message": { "type": "string" },
+          "groups": {
+            "type": "object",
+            "additionalProperties": { "$ref": "#/definitions/caseGroupResult" }
+          },
+          "run_ids": {
+            "type": "object",
+            "additionalProperties": { "type": "array", "items": { "type": "string" } }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "num": { "type": ["number", "integer", "null"], "description": "未运行为 null" },
+    "num01": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "caseGroupResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["correct", "hallucinated", "total"],
+      "properties": {
+        "correct": { "type": "integer", "minimum": 0 },
+        "hallucinated": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 },
+        "duration_p50_ms": { "$ref": "#/definitions/num" },
+        "duration_p95_ms": { "$ref": "#/definitions/num" },
+        "estimated_token_runs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
