@@ -29,13 +29,19 @@ $env:LLM_API_KEY = "..."
 uv run python -m bdlh_runtime.evaluation.ab_eval --runs 5
 ```
 
-## 私有 API
+## 私有 API（本地原生启动）
+
+本地开发时 data 也在本机原生运行（经 SSH 隧道连云端库，端口与启动方式见
+`data/README.md` 的"本地开发"），`DATA_API_BASE_URL` 指向本地 data 端口：
 
 ```powershell
 $env:DATA_INTERNAL_TOKEN = "..."
-$env:DATA_API_BASE_URL = "http://127.0.0.1:8080/internal/v1"
+$env:DATA_API_BASE_URL = "http://127.0.0.1:18081/internal/v1"   # 与 data 的 SERVER_PORT 一致
+$env:ARTIFACTS_DIR = "<仓库>\engine\var\artifacts"               # 缺省 /app/artifacts 是容器内路径
 uv run uvicorn bdlh_runtime.run_api:app --host 127.0.0.1 --port 8090
 ```
+
+镜像构建与推送在云服务器执行（见 `deploy/README.md`），本地不做 Docker 构建。
 
 运行接口通过账号会话鉴权：先 `POST /api/v1/login` 获取令牌，再携带 `Authorization: Bearer <token>` 调用其它接口。
 
