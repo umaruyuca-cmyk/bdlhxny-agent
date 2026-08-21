@@ -22,6 +22,7 @@ import random
 import statistics
 import sys
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from pathlib import Path
@@ -265,6 +266,9 @@ class ABReport:
     model: str = "glm-4.7"
     executor: str = "frozen"
     run_records: list[RunRecord] = field(default_factory=list)
+    # 过程控制(任务四):CANCELLED / TOKEN_BUDGET_EXCEEDED;未发起的运行数
+    stop_reason: str | None = None
+    skipped_runs: int = 0
     # 有效样本门槛(任务三):每组 VALID 运行数 ≥ min_valid_samples 才可认定正式批次
     min_valid_samples: int = DEFAULT_MIN_VALID_SAMPLES
     validity_threshold: dict[str, Any] = field(default_factory=dict)
@@ -600,10 +604,15 @@ async def run_ab_eval(
     inter_run_delay_s: float = 1.0,
     interleave_seed: int = DEFAULT_INTERLEAVE_SEED,
     min_valid_samples: int | None = None,
+    should_stop: Callable[[], bool] | None = None,
+    max_total_tokens: int | None = None,
 ) -> ABReport:
     """跑一轮对照批次;每次执行(case × mode × repeat)产出完整 RunRecord。
 
     交错运行:题序按 repeat 轮转、三组顺序按 ``interleave_seed`` 确定性洗牌。
+    过程可控(任务四):``should_stop`` 协作取消(轮次间隙检查,已开始的运行
+    等待完成);``max_total_tokens`` 批次预算耗尽后停止发起新运行(区别于 INVALID,
+    未发起的运行不产生记录,计入 skipped)。
     """
 
     if not cases:
@@ -799,16 +808,37 @@ async def run_ab_eval(
         run_records.append(t_recorder.record)
 
     # 交错运行(任务三):题序按 repeat 轮转、三组顺序按确定性种子洗牌,
-    # 避免先跑组总是遇到更好的服务状态;同一种子可完整复现执行序
+    # 避免先跑组总是遇到更好的服务状态;同一种子可完整复现执行序。
+    # 停止检查在发起新运行之前(任务四):已开始的运行等待完成,不硬杀。
+    expected_runs = len(selected) * runs_per_case * len(group_modes)
+    stop_reason: str | None = None
+    consumed_tokens = 0
+    stopped = False
     for repeat_index in range(runs_per_case):
+        if stopped:
+            break
         offset = repeat_index % len(selected)
         rotated = selected[offset:] + selected[:offset] if offset else list(selected)
         for case in rotated:
+            if stopped:
+                break
             order = list(group_modes)
             rng.shuffle(order)
             for mode in order:
+                if should_stop is not None and should_stop():
+                    stop_reason = "CANCELLED"
+                    stopped = True
+                    break
+                if max_total_tokens is not None and consumed_tokens >= max_total_tokens:
+                    stop_reason = "TOKEN_BUDGET_EXCEEDED"
+                    stopped = True
+                    break
                 await run_group(mode, case, repeat_index)
+                latest = run_records[-1].measurements or {}
+                consumed_tokens += int(latest.get("promptTokens", 0)) + int(latest.get("completionTokens", 0))
                 await asyncio.sleep(inter_run_delay_s)
+            if stopped:
+                break
 
     case_reports_ordered = [case_reports[case.id] for case in selected]
     for cr in case_reports_ordered:
@@ -843,6 +873,8 @@ async def run_ab_eval(
         model=model,
         executor="frozen",
         run_records=run_records,
+        stop_reason=stop_reason,
+        skipped_runs=max(0, expected_runs - len(run_records)),
         min_valid_samples=resolved_min_valid,
         validity_threshold=evaluate_validity_threshold(
             baseline_summary, treatment_summary, react_summary, min_valid=resolved_min_valid
@@ -939,6 +971,10 @@ def render_markdown(report: ABReport) -> str:
         lines.append(
             f"| {label} | {group.total_runs} | {group.valid_runs} | {group.invalid_runs} | {_reason_cell(group)} |"
         )
+    if report.stop_reason:
+        label = "人工取消" if report.stop_reason == "CANCELLED" else "批次 token 预算耗尽"
+        lines.append("")
+        lines.append(f"**批次提前停止**:{label},跳过 {report.skipped_runs} 次未发起的运行(部分完成语义)。")
     threshold = report.validity_threshold or {}
     if threshold:
         verdict = "满足" if threshold.get("met") else "未满足"
@@ -1152,6 +1188,8 @@ def _report_payload(report: ABReport) -> dict[str, Any]:
         "cases": cases,
         "validity_threshold": report.validity_threshold,
         "min_valid_samples": report.min_valid_samples,
+        "stop_reason": report.stop_reason,
+        "skipped_runs": report.skipped_runs,
         "run_records": [
             {
                 "run_key": record.run_key,

@@ -94,6 +94,11 @@ class EvalBatchRequest(BaseModel):
         max_length=100,
         description="模型名；缺省取 LLM_MODEL 环境变量（唯一请求级可配项，base_url 与密钥只在服务端环境变量）",
     )
+    max_total_tokens: int | None = Field(
+        default=None,
+        ge=1,
+        description="批次 token 上限(任务四):累计消耗达到后停止发起新运行;缺省取 EVAL_MAX_TOTAL_TOKENS(未设=不限)",
+    )
 
 
 class LoginRequest(BaseModel):
@@ -192,6 +197,7 @@ def start_eval_batch(
                 # 门槛配置随批次记录(结果在工件 validity_threshold;任务五消费)
                 "minValidSamples": int(os.getenv("EVAL_MIN_VALID_SAMPLES", "5")),
                 "interleaveSeed": DEFAULT_INTERLEAVE_SEED,
+                "maxTotalTokens": _max_total_tokens(request),
             },
         )
     except DataServiceError as exc:
@@ -208,16 +214,18 @@ def start_eval_batch(
         "request": request.model_dump(),
         "report": None,
         "error": None,
+        "cancel_requested": False,
     }
     _JOBS[job_id] = job
 
     def task() -> None:
         try:
-            payload, run_records = _execute_eval(request, catalog)
+            payload, run_records = _execute_eval(request, catalog, job=job)
             _persist_runs(data, batch_id, request, payload, run_records)
             _persist_artifact(batch_id, payload)
-            data.complete_batch(batch_id, "COMPLETE")
-            job["status"] = "done"
+            batch_status = "CANCELLED" if payload.get("stop_reason") == "CANCELLED" else "COMPLETE"
+            data.complete_batch(batch_id, batch_status)
+            job["status"] = "cancelled" if batch_status == "CANCELLED" else "done"
             job["report"] = payload
         except Exception as exc:  # 作业失败进入可见状态，不能让服务进程退出
             with contextlib.suppress(DataServiceError):
@@ -237,6 +245,22 @@ def get_job(job_id: str, account: Annotated[dict[str, Any], Depends(require_logi
     if job is None:
         raise HTTPException(status_code=404, detail="作业不存在；已完成的运行记录请从数据服务读取")
     return job
+
+
+@app.post("/api/v1/jobs/{job_id}/cancel")
+def cancel_job(job_id: str, account: Annotated[dict[str, Any], Depends(require_login)]) -> dict[str, Any]:
+    """协作取消(任务四):置停止标志,运行循环在发起新运行前检查;已开始的
+    模型调用等待完成,不硬杀。幂等:重复取消与对已结束作业取消均无副作用。"""
+    job = _JOBS.get(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="作业不存在")
+    if job["status"] == "running":
+        job["cancel_requested"] = True
+    return {
+        "job_id": job_id,
+        "status": job["status"],
+        "cancel_requested": bool(job.get("cancel_requested")),
+    }
 
 
 @app.post("/api/v1/context-batches")
@@ -273,6 +297,7 @@ def start_context_batch(
                 # 门槛配置随批次记录(结果在工件 validity_threshold;任务五消费)
                 "minValidSamples": int(os.getenv("EVAL_MIN_VALID_SAMPLES", "5")),
                 "interleaveSeed": DEFAULT_INTERLEAVE_SEED,
+                "maxTotalTokens": _max_total_tokens(request),
             },
         )
     except DataServiceError as exc:
@@ -330,7 +355,9 @@ def get_run_detail(run_id: str, account: Annotated[dict[str, Any], Depends(requi
 
 
 def _execute_eval(
-    request: EvalBatchRequest, catalog: list[dict[str, Any]]
+    request: EvalBatchRequest,
+    catalog: list[dict[str, Any]],
+    job: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[RunRecord]]:
     async def run() -> Any:
         return await run_ab_eval(
@@ -338,10 +365,20 @@ def _execute_eval(
             model=request.model,
             with_react=request.include_react,
             cases=load_cases(catalog),
+            should_stop=(lambda: bool(job.get("cancel_requested"))) if job is not None else None,
+            max_total_tokens=_max_total_tokens(request),
         )
 
     report = asyncio.run(run())
     return _report_payload(report), report.run_records
+
+
+def _max_total_tokens(request: EvalBatchRequest | ContextBatchRequest) -> int | None:
+    requested = getattr(request, "max_total_tokens", None)
+    if requested is not None:
+        return requested
+    raw = os.getenv("EVAL_MAX_TOTAL_TOKENS", "").strip()
+    return int(raw) if raw.isdigit() else None
 
 
 def _execute_context_eval(

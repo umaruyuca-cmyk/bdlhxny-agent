@@ -284,7 +284,7 @@ def test_batch_persists_stepwise_records_for_each_mode(
         _sample_recorder("full-system"),
     ]
 
-    def fake_execute(_request: Any, _catalog: Any) -> tuple[dict[str, Any], list[Any]]:
+    def fake_execute(_request: Any, _catalog: Any, job: Any = None) -> tuple[dict[str, Any], list[Any]]:
         payload = {
             "cases": [
                 {
@@ -354,7 +354,7 @@ def test_invalid_run_is_not_marked_valid(
     monkeypatch.setattr(run_api, "ARTIFACTS_DIR", tmp_path)
     recorder = _sample_recorder("baseline-tool-calling", status="INVALID", error_category="RATE_LIMITED")
 
-    def fake_execute(_request: Any, _catalog: Any) -> tuple[dict[str, Any], list[Any]]:
+    def fake_execute(_request: Any, _catalog: Any, job: Any = None) -> tuple[dict[str, Any], list[Any]]:
         return {"cases": [], "run_records": [{"run_key": recorder.record.run_key, "run_id": None}]}, [
             recorder.record
         ]
