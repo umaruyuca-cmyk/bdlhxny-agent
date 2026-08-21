@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from typing import Any
 
 from bdlh_runtime.engine.checkpoint import CognitiveCheckpoint, build_checkpoint
 from bdlh_runtime.engine.contracts import (
+    EMPTY_ANSWER_AUDIT,
+    EMPTY_ANSWER_REASON,
+    RESPOND_UNAVAILABLE_REASON,
     CognitiveActionSummary,
     CognitiveActionType,
     CognitiveExecution,
@@ -17,7 +21,11 @@ from bdlh_runtime.engine.contracts import (
 )
 from bdlh_runtime.engine.loop import AgentLoop, AgentResult, AgentTurn
 
+logger = logging.getLogger("bdlh_runtime.engine.runtime")
+
 _GUEST_IDS = frozenset({"", "guest", "anonymous"})
+#: checkpoint 恢复时合成 history 的固定提示语。
+_RESUME_PROMPT = "请补充刚才缺的信息。"
 
 
 class EngineRuntime:
@@ -53,7 +61,7 @@ class EngineRuntime:
             if original and original != message:
                 history = [
                     {"role": "user", "content": original},
-                    {"role": "assistant", "content": "请补充刚才缺的信息。"},
+                    {"role": "assistant", "content": _RESUME_PROMPT},
                 ]
         if self._executor is not None:
             if hasattr(self._executor, "set_user"):
@@ -124,7 +132,16 @@ def _execution_from_result(event: InputEvent, result: AgentResult) -> CognitiveE
         audits = [item.audit_code or "GUARDRAIL_BLOCKED" for item in result.audits if item.status == "REJECTED"]
     answer = (result.answer or "").strip()
     if not answer:
-        answer = "当前对话能力暂不可用，请稍后重试。" if result.degraded or kind == "LIMITED" else "已完成。"
+        if result.degraded or kind == "LIMITED":
+            answer = RESPOND_UNAVAILABLE_REASON
+        else:
+            # 正常路径空答案按异常兜底：明确提示 + 审计码，不再伪装成“已完成。”
+            answer = EMPTY_ANSWER_REASON
+            if EMPTY_ANSWER_AUDIT not in audits:
+                audits.append(EMPTY_ANSWER_AUDIT)
+            logger.warning(
+                "run %s: 空答案（非降级路径），audit=%s", event.run_id or event.event_id, EMPTY_ANSWER_AUDIT
+            )
     public_events: list[str] = []
     if kind == "BLOCKED":
         public_events.append("guardrail.blocked")

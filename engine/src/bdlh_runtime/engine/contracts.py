@@ -16,6 +16,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 #: 未启用行动的稳定审计码（§7.2）：不能静默降级为 RESPOND。
 ACTION_NOT_ENABLED = "ACTION_NOT_ENABLED"
 RESPOND_UNAVAILABLE_REASON = "当前对话能力暂不可用，请稍后重试。"
+#: 正常路径（非降级）下模型未产生答案时的兜底文案与审计码；
+#: 不与降级共用文案，避免掩盖异常空回复。
+EMPTY_ANSWER_REASON = "本次运行未产生答案，请重试或换个问法。"
+EMPTY_ANSWER_AUDIT = "EMPTY_ANSWER"
 
 
 class DomainOperation(StrEnum):
