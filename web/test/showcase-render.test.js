@@ -67,3 +67,52 @@ test("esc 转义 HTML，pct/num 的 null 渲染为未运行", () => {
   assert.equal(S.num(null), "未运行");
   assert.equal(S.num(1200, "ms"), "1200ms");
 });
+
+/* ── 结果页渲染 ─────────────────────────────────────────── */
+
+const REPORT = {
+  batch_id: "fa37d76f-0000-0000-0000-000000000000",
+  experiment_type: "agent-implementation",
+  generated_at: "2026-08-21T14:00:00+08:00",
+  git_commit: "abc1234",
+  model: "glm-4.7-flash",
+  fixed_conditions: { case_ids: ["a", "b"], runs_per_case: 1, tool_data: "frozen", variable: "agent_mode" },
+  groups: [
+    { key: "baseline-tool-calling", label: "裸 tool calling", valid_runs: 1, invalid_runs: 0,
+      metrics: { tool_selection_rate: 0.5, hallucination_rate: null, forbidden_leak_rate: 0, number_hallucination_rate: 0.2, c1_violation_rate: 0, c2_violation_rate: 0, mean_rounds: 2, mean_tokens: 900, median_duration_ms: 3000, p95_duration_ms: 3500, task_success_rate: null } },
+    { key: "full-system", label: "完整工程模式", valid_runs: 1, invalid_runs: 0,
+      metrics: { tool_selection_rate: 1, hallucination_rate: 0, forbidden_leak_rate: 0, number_hallucination_rate: 0, c1_violation_rate: 0, c2_violation_rate: 0, mean_rounds: 1.5, mean_tokens: 700, median_duration_ms: 2500, p95_duration_ms: 2800, task_success_rate: null } },
+  ],
+  outcome_counts: { win: 3, regress: 1, tie: 6, both_fail: 8, invalid: null },
+  cases: [
+    { id: "research-01", category: "金融研究", message: "宁德时代现在什么价",
+      groups: { "baseline-tool-calling": { correct: 0, hallucinated: 1, total: 1, estimated_token_runs: 0 }, "full-system": { correct: 1, hallucinated: 0, total: 1, estimated_token_runs: 1 } } },
+    { id: "chat-01", category: "闲聊", message: "你好",
+      groups: { "baseline-tool-calling": { correct: 1, hallucinated: 0, total: 1, estimated_token_runs: 0 }, "full-system": { correct: 1, hallucinated: 0, total: 1, estimated_token_runs: 0 } } },
+  ],
+};
+
+test("组指标总表：null 指标渲染未运行，不出现改善/回归结论词", () => {
+  const html = S.renderGroupTable(REPORT);
+  assert.match(html, /工具选择准确率/);
+  assert.match(html, /未运行/);
+  assert.match(html, /metric-def/); // 指标定义就地展开
+  assert.doesNotMatch(html, /改善|回归/);
+});
+
+test("五类结局徽章齐全，无效显示未运行", () => {
+  const html = S.renderOutcomeBadges(REPORT);
+  for (const label of ["获胜", "退化", "平局", "双方失败", "无效"]) assert.match(html, new RegExp(label));
+  assert.match(html, /无效 <strong>未运行<\/strong>/);
+});
+
+test("分场景明细支持场景筛选", () => {
+  assert.equal(S.categories(REPORT).join(","), "金融研究,闲聊");
+  const all = S.renderCaseRows(REPORT, null);
+  assert.match(all, /research-01/);
+  assert.match(all, /chat-01/);
+  const filtered = S.renderCaseRows(REPORT, "闲聊");
+  assert.match(filtered, /chat-01/);
+  assert.doesNotMatch(filtered, /research-01/);
+  assert.match(all, /≈1/); // 估算口径运行数标记
+});

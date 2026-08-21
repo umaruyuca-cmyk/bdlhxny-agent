@@ -42,18 +42,74 @@
     <h1>对照结果</h1>
     <h2 id="tabs">两类实验分开看</h2>
     <p>Agent 实现方式对照与上下文策略对照是两个独立实验：<strong>同一张表不混排两种变量</strong>——混排后无法把差异归因给任一因素。</p>
-    <div id="resultTabs" class="placeholder-block">
-      <p>等待发布数据：批次报告（<code>/showcase-data/batches/{id}/report.json</code>）发布后，此处渲染总表、分场景明细与筛选。</p>
+    <div class="tabbar" id="expTabs">
+      <button type="button" class="tab active" data-tab="agent">Agent 实现方式对照</button>
+      <button type="button" class="tab" data-tab="context">上下文策略对照</button>
     </div>
-    <h2 id="agent">Agent 实现方式对照</h2>
-    <div id="agentTable" class="placeholder-block"><p>未运行。</p></div>
-    <h2 id="context">上下文策略对照</h2>
-    <div id="contextTable" class="placeholder-block"><p>未运行：上下文构建器接入中。</p></div>
-    <h2 id="outcomes">胜 / 负 / 平 / 双败 / 无效</h2>
-    <p>结果展示五类结局计数（获胜、退化、平局、双方失败、无效），不只挑「基线失败、完整模式成功」的样本；完整批次始终可查。</p>
-    <div id="outcomeCounts" class="placeholder-block"><p>未运行。</p></div>
+    <div id="agentPanel">
+      <h3>组指标总表 <span class="table-meta" id="batchMeta"></span></h3>
+      <div id="agentTable" class="placeholder-block"><p>等待发布数据。</p></div>
+      <h3 id="outcomes-anchor">五类结局计数</h3>
+      <p>按题比较裸调用与完整模式（确定性回算）；<strong>不只挑「基线失败、完整模式成功」的样本</strong>，完整批次见下表。</p>
+      <div id="outcomeCounts" class="placeholder-block"><p>未运行。</p></div>
+      <h3>分场景明细 <label class="filter-label">筛选场景 <select id="categoryFilter"></select></label></h3>
+      <div id="caseTable" class="placeholder-block"><p>未运行。</p></div>
+    </div>
+    <div id="contextPanel" hidden>
+      <h2 id="context">上下文策略对照</h2>
+      <div class="placeholder-block"><p id="contextNotice">未运行：上下文构建器接入中（P3-2）。</p></div>
+    </div>
   </main>
 </div>
 <script src="/docs/docs.js"></script>
+<script src="/showcase/shared.js"></script>
+<script>
+(function () {
+  "use strict";
+  var report = null;
+
+  function render() {
+    if (!report) return;
+    document.getElementById("agentTable").innerHTML = SHOWCASE.renderGroupTable(report);
+    document.getElementById("outcomeCounts").innerHTML = SHOWCASE.renderOutcomeBadges(report);
+    var filter = document.getElementById("categoryFilter");
+    var cats = SHOWCASE.categories(report);
+    filter.innerHTML = '<option value="">全部</option>' + cats.map(function (c) {
+      return '<option value="' + SHOWCASE.esc(c) + '">' + SHOWCASE.esc(c) + "</option>";
+    }).join("");
+    filter.onchange = function () {
+      document.getElementById("caseTable").innerHTML = SHOWCASE.renderCaseTable(report, filter.value || null);
+    };
+    filter.onchange();
+    document.getElementById("batchMeta").textContent =
+      "批次 " + report.batch_id.slice(0, 8) + " · " + report.model + " · " + report.generated_at + " · commit " + report.git_commit;
+    if (report.experiment_type === "context-strategy") {
+      document.getElementById("contextNotice").textContent = "该批次为上下文策略对照，总表见上下文对照页。";
+    }
+  }
+
+  document.querySelectorAll("#expTabs .tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      document.querySelectorAll("#expTabs .tab").forEach(function (t) { t.classList.remove("active"); });
+      tab.classList.add("active");
+      document.getElementById("agentPanel").hidden = tab.dataset.tab !== "agent";
+      document.getElementById("contextPanel").hidden = tab.dataset.tab !== "context";
+    });
+  });
+
+  fetch("/showcase-data/index.json", { cache: "no-store" })
+    .then(function (res) { if (!res.ok) throw new Error("no index"); return res.json(); })
+    .then(function (index) {
+      var latest = index.latest_batch;
+      if (!latest) throw new Error("no batch");
+      return fetch("/showcase-data/batches/" + latest.batch_id + "/report.json", { cache: "no-store" });
+    })
+    .then(function (res) { if (!res.ok) throw new Error("no report"); return res.json(); })
+    .then(function (data) { report = data; render(); })
+    .catch(function () {
+      document.getElementById("agentTable").innerHTML = '<div class="placeholder-block">等待发布数据：批次报告发布后此处渲染。</div>';
+    });
+})();
+</script>
 </body>
 </html>
