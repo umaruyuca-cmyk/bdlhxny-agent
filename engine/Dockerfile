@@ -10,6 +10,12 @@ COPY pyproject.toml uv.lock README.md ./
 COPY src ./src
 
 RUN pip install --no-cache-dir "uv==0.12.3" \
-    && uv sync --frozen --no-dev
+    && uv sync --frozen --no-dev \
+    && useradd --create-home --uid 10001 appuser \
+    && mkdir -p /app/artifacts \
+    && chown -R appuser:appuser /app
+
+USER appuser
+EXPOSE 8090
 
 CMD ["python", "-m", "uvicorn", "bdlh_runtime.run_api:app", "--host", "0.0.0.0", "--port", "8090"]
