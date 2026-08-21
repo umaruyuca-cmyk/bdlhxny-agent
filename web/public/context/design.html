@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>长短对照设计 · 上下文压缩 · Touchstone</title>
+<meta name="description" content="六套长上下文用例 × full-raw/budgeted-comp 两变体,同一 Agent、同一判官。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/context/">压缩算法</a></li>
+      <li><a href="/context/design" class="active">长短对照设计</a></li>
+      <li><a href="/context/results">用例结果</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#cases">六套用例 × 两条变体</a></li>
+      <li><a href="#assertions">上下文断言</a></li>
+      <li><a href="#launch">如何发起</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>长短对照设计 · 上下文压缩</h1>
+<h2 id="cases">六套用例 × 两条变体</h2>
+<p>方向覆盖金融 3(组合诊断 / 估值口径 / 新闻去重)+ 其他 2(出行天气 / 长文档手册)+ 闲聊 1(长历史)。每套两条变体挂同一份上下文条目,只变处理策略:</p>
+<ul>
+  <li><strong>full-raw</strong>:全量透传(大预算);</li>
+  <li><strong>budgeted-comp</strong>:按预算压缩(小预算)。</li>
+</ul>
+<p>条目数据在库(<code>changes/20260821-long-context-cases.sql</code>,批量条目由确定性生成,有业务含义),执行时经数据服务读取,运行记录关联真实变体与快照。</p>
+    <h2 id="assertions">上下文断言</h2>
+<p>与编排对照同一 Agent 逻辑、同一冻结工具数据、同一判官之外,压缩对照新增四类断言:</p>
+<ul>
+  <li><strong>required 保留率 100%</strong>(构建报告逐条核对);</li>
+  <li><strong>required_facts 出现</strong>:关键事实取值必须出现在构建后的工作上下文;</li>
+  <li><strong>forbidden_facts 不入答案</strong>:过期/旧口径取值不得出现在最终答案;</li>
+  <li><strong>注入隔离</strong>:untrusted 条目不在指令区且被包裹(或被整体隔离)。</li>
+</ul>
+    <h2 id="launch">如何发起</h2>
+<p>私有侧「上下文对照批次」端点(见<a href="/ops/run-api">私有运行 API</a>)或 CLI <code>python -m bdlh_runtime.evaluation.context_eval</code>:六套 × 两变体 × N 次;每变体运行产出九段工件与 context_builds 处理报告(条目/决策/消息级)。结果见<a href="/context/results">用例结果</a>。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>工件与发布 · 数据与运行 · Touchstone</title>
+<meta name="description" content="九段运行工件、事件流落库与发布全量校验。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/ops/">数据库与冻结数据</a></li>
+      <li><a href="/ops/run-api">私有运行 API</a></li>
+      <li><a href="/ops/artifacts" class="active">工件与发布</a></li>
+      <li><a href="/ops/deploy">部署与边界</a></li>
+      <li><a href="/ops/roadmap">路线图</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#artifact">九段运行工件</a></li>
+      <li><a href="#publish">发布全量校验</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>工件与发布 · 数据与运行</h1>
+<h2 id="artifact">九段运行工件</h2>
+<p>每次运行产出九段工件(<code>artifact_version/status/validity/case/experiment/provenance/context/steps/result/judgment/timing/tokens/artifact_hash</code>)双写:文件(<code>runs/{run_id}.json</code>)与库(<code>run_artifacts</code>);hash 覆盖全段可复算。事件与明细(run_events、model_calls+messages、tool_calls、guardrail_checks、run_measurements)经 data 服务落库。</p>
+    <h2 id="publish">发布全量校验</h2>
+<p>发布脚本 v2 消费批次工件 + 逐运行工件,发布前校验:有效样本门槛(任务三判定)、逐运行 hash 复算、敏感信息零容忍(密钥/内部地址/邮箱/手机号/系统提示,报出文件与字段路径)、引用可解析、无效运行不冒充失败。任何一条不过整体拒绝并列出原因清单——<strong>不部分发布</strong>。通过后:index 认定 <code>is_formal</code>、批次报告真实有效性、逐运行公开工件落 <code>showcase-data/runs/</code>,并可登记 <code>publications/publication_runs</code>。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

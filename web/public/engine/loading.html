@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>工具装载 · 引擎与治理 · Touchstone</title>
+<meta name="description" content="scoped 定向装载与 search 检索装载两种策略。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/engine/">Agent 循环</a></li>
+      <li><a href="/engine/loading" class="active">工具装载</a></li>
+      <li><a href="/engine/catalog">工具目录</a></li>
+      <li><a href="/engine/governance">治理中间件</a></li>
+      <li><a href="/engine/guardrail">输出护栏</a></li>
+      <li><a href="/engine/tools">工具清单</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#modes">两种装载策略</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>工具装载 · 引擎与治理</h1>
+<h2 id="modes">两种装载策略</h2>
+<ul>
+  <li><strong>scoped(默认)</strong>:按场景与登录态定向装载当轮可见工具——规模约二十张卡时更确定、可审计;</li>
+  <li><strong>search(实验)</strong>:模型先经 <code>search_tools</code> 检索再按名调用——面向规模增长;权限过滤先于检索。</li>
+</ul>
+<p>每轮装载集合写入运行工件(<code>visible_tools</code>),单次运行页可见「当次模型到底看到了哪些工具」。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

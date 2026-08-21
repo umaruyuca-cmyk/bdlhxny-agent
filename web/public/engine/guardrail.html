@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>输出护栏 · 引擎与治理 · Touchstone</title>
+<meta name="description" content="答案出口三检查:数字接地、C-1 交易语义、C-2 适当性。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/engine/">Agent 循环</a></li>
+      <li><a href="/engine/loading">工具装载</a></li>
+      <li><a href="/engine/catalog">工具目录</a></li>
+      <li><a href="/engine/governance">治理中间件</a></li>
+      <li><a href="/engine/guardrail" class="active">输出护栏</a></li>
+      <li><a href="/engine/tools">工具清单</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#checks">三项出口检查</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>输出护栏 · 引擎与治理</h1>
+<h2 id="checks">三项出口检查</h2>
+<ul>
+  <li><strong>数字接地</strong>:答案中的非平凡数字必须出现在某条工具结果中,幻觉数字替换为「[数据待核实]」;</li>
+  <li><strong>C-1</strong>:交易执行语义替换为「(该操作不被允许)」并追加风险披露;</li>
+  <li><strong>C-2</strong>:适当性结论替换为「(不构成适当性结论)」。</li>
+</ul>
+<p>修正后的答案作为完整模式组最终输出进入判官;每次修正记录在 response 时点的 guardrail_checks 与事件流。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

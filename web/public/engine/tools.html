@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>工具清单 · 引擎与治理 · Touchstone</title>
+<meta name="description" content="当前目录快照的只读工具清单;真源在数据库。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/engine/">Agent 循环</a></li>
+      <li><a href="/engine/loading">工具装载</a></li>
+      <li><a href="/engine/catalog">工具目录</a></li>
+      <li><a href="/engine/governance">治理中间件</a></li>
+      <li><a href="/engine/guardrail">输出护栏</a></li>
+      <li><a href="/engine/tools" class="active">工具清单</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#list">只读工具清单(当前目录)</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>工具清单 · 引擎与治理</h1>
+<h2 id="list">只读工具清单(当前目录)</h2>
+<p>清单是数据库目录的快照投影;权限以目录与治理链实时裁决为准。全部工具只读(G2 红线),不存在任何交易执行类工具(见<a href="/engine/catalog">工具目录</a>)。</p>
+<table><thead><tr><th>工具</th><th>用途</th><th>最低身份</th></tr></thead><tbody>
+      <tr><td><code>market.resolve_instrument</code></td><td>标的解析(代码/名称/行业)</td><td>游客</td></tr>
+      <tr><td><code>market.get_realtime_quote</code></td><td>实时行情</td><td>游客</td></tr>
+      <tr><td><code>market.get_historical_prices</code></td><td>历史行情</td><td>游客</td></tr>
+      <tr><td><code>market.get_valuation</code></td><td>估值指标(PE/PB 与分位)</td><td>游客</td></tr>
+      <tr><td><code>market.get_financial_statements</code></td><td>财务摘要</td><td>游客</td></tr>
+      <tr><td><code>market.get_industry_context</code></td><td>行业语境</td><td>游客</td></tr>
+      <tr><td><code>market.get_news</code></td><td>个股新闻</td><td>游客</td></tr>
+      <tr><td><code>market.get_money_flow</code></td><td>资金流</td><td>游客</td></tr>
+      <tr><td><code>research.web_search</code></td><td>网络检索(冻结数据)</td><td>游客</td></tr>
+      <tr><td><code>research.deep_search</code></td><td>深度检索(冻结数据)</td><td>游客</td></tr>
+      <tr><td><code>search_tools</code></td><td>工具检索伴侣(检索装载模式,引擎侧登记)</td><td>游客</td></tr>
+      <tr><td><code>portfolio.get_current_positions</code></td><td>当前持仓</td><td>机主</td></tr>
+      <tr><td><code>portfolio.get_account_snapshot</code></td><td>账户快照</td><td>机主</td></tr>
+      <tr><td><code>portfolio.get_transaction_history</code></td><td>历史交易(只读白名单)</td><td>机主</td></tr>
+      <tr><td><code>portfolio.build_current_valuation</code></td><td>持仓估值</td><td>机主</td></tr>
+      <tr><td><code>user.get_risk_profile</code></td><td>风险画像</td><td>机主</td></tr>
+      <tr><td><code>analysis.run_analysis</code></td><td>综合分析</td><td>机主</td></tr>
+    </tbody></table>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

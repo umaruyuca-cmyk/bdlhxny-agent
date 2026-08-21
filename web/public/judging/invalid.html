@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>无效运行与口径 · 评判标准 · Touchstone</title>
+<meta name="description" content="VALID/INVALID/FAILED 分类、原因组与有效样本门槛。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/judging/">指标定义</a></li>
+      <li><a href="/judging/judge">判官说明</a></li>
+      <li><a href="/judging/invalid" class="active">无效运行与口径</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#states">运行状态与有效性</a></li>
+      <li><a href="#threshold">有效样本门槛</a></li>
+      <li><a href="#budget">预算停止不是无效</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>无效运行与口径 · 评判标准</h1>
+<h2 id="states">运行状态与有效性</h2>
+<p>运行状态机(架构文档 §7.1):<code>CREATED → SNAPSHOTTING → BUILDING_CONTEXT → RUNNING → JUDGING → COMPLETE</code>,异常终态 <code>FAILED / INVALID / CANCELLED</code>。</p>
+<table><thead><tr><th>分类</th><th>含义</th><th>进能力统计?</th></tr></thead><tbody>
+<tr><td>COMPLETE / VALID</td><td>Agent 与评测都完成</td><td>是</td></tr>
+<tr><td>FAILED(仍为 VALID 样本)</td><td>有效环境下产生任务失败</td><td>是,作为失败样本</td></tr>
+<tr><td>INVALID</td><td>429 限流 / 余额不足 / 模型服务不可用 / 上下文构建失败 / 工件写失败</td><td>否,单列原因</td></tr>
+<tr><td>CANCELLED</td><td>人工取消或批次停止(已完成部分保留)</td><td>否</td></tr>
+</tbody></table>
+    <h2 id="threshold">有效样本门槛</h2>
+<p>批次级判定:每组 VALID 运行数 ≥ 5(可配置)才满足门槛;门槛状态写入批次记录与工件。未达门槛批次可运行、可查看,但<strong>不可认定正式</strong>——发布脚本直接拒绝并说明每组缺口。</p>
+    <h2 id="budget">预算停止不是无效</h2>
+<p>批次 token 上限触发的停止不产生 INVALID 运行:未发起的运行计入 <code>skipped</code> 并标注 <code>TOKEN_BUDGET_EXCEEDED</code>,与基础设施失败严格区分。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

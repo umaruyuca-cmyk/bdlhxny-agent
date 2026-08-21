@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>压缩算法 · 上下文压缩 · Touchstone</title>
+<meta name="description" content="四策略、条目分类、强制项保留与不可信数据包裹。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/" class="active">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/context/" class="active">压缩算法</a></li>
+      <li><a href="/context/design">长短对照设计</a></li>
+      <li><a href="/context/results">用例结果</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#strategies">四种策略</a></li>
+      <li><a href="#classification">条目分类与红线</a></li>
+      <li><a href="#tokens">token 计数口径</a></li>
+      <li><a href="#wiring">接入位置</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>压缩算法 · 上下文压缩</h1>
+<h2 id="strategies">四种策略</h2>
+<ul>
+  <li><strong>full</strong>:全量透传(预算内不压缩);</li>
+  <li><strong>recent-n</strong>:只保留最近 N 条(窗口外省略);</li>
+  <li><strong>single-summary</strong>:可压缩项合并为单摘要;</li>
+  <li><strong>budgeted</strong>:按优先级与性价比选择压缩,仅引用项以来源元数据代表。</li>
+</ul>
+    <h2 id="classification">条目分类与红线</h2>
+<p>每条上下文条目带分类:<strong>required</strong>(强制保留)/ <strong>compressible</strong>(可压缩)/ <strong>reference_only</strong>(仅引用)/ <strong>distractor</strong>(干扰:过期、跨用户、注入)。强制项超预算直接判运行失败(<code>CONTEXT_BUILD_FAILED</code>),<strong>不静默降级</strong>。跨用户条目按属主隔离;不可信条目一律以 <code>&lt;untrusted-data&gt;</code> 包裹且不进入指令区。</p>
+    <h2 id="tokens">token 计数口径</h2>
+<p>当前计数器为保守确定性口径 <code>conservative-cjk1-latin4-v1</code>(CJK/标点每字 1 token,拉丁字母/数字每 4 字符 1 token);版本号写入工件与处理报告,口径可辨。处理报告记录原始/工作 token、保留/压缩/引用/隔离/省略计数、逐条决策原因与构建耗时。</p>
+    <h2 id="wiring">接入位置</h2>
+<p>Agent 循环的模型输入拼装统一经构建器(有架构测试守卫,禁止旁路拼装):系统提示作为纯指令条目逐字透传,固定上下文条目全部进入构建器裁决。见<a href="/engine/">Agent 循环</a>。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

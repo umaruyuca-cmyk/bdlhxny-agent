@@ -4,7 +4,8 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>单次运行 · Touchstone</title>
+<title>用例结果 · 上下文压缩 · Touchstone</title>
+<meta name="description" content="策略比较表读实际批次产物;正反例成对展示。">
 <link rel="stylesheet" href="/docs/docs.css">
 </head>
 <body>
@@ -28,55 +29,39 @@
   <aside class="docs-side" id="docsSide">
     <h4>模块页面</h4>
     <ul>
-      <li><a href="/showcase/">批次概览</a></li>
-      <li><a href="/showcase/results">对照结果</a></li>
-      <li><a href="/showcase/runs">单次运行</a></li>
+      <li><a href="/context/">压缩算法</a></li>
+      <li><a href="/context/design">长短对照设计</a></li>
+      <li><a href="/context/results" class="active">用例结果</a></li>
     </ul>
     <h4>本页目录</h4>
     <ul>
-      <li><a href="#how">如何抵达单次运行</a></li>
-      <li><a href="#sections">九段固定顺序</a></li>
+      <li><a href="#strategies">四种策略</a></li>
+      <li><a href="#table">策略比较表(读实际工件)</a></li>
+      <li><a href="#pairs">正反例成对展示</a></li>
     </ul>
     <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
   </aside>
   <main class="docs-main">
-    <h1>单次运行详情</h1>
-    <h2 id="how">如何抵达单次运行</h2>
-    <p>从<a href="/showcase/results">对照结果</a>的总表与分场景明细逐行下钻。每个汇总数字都能定位到具体的运行工件。</p>
-    <h2 id="sections">九段固定顺序</h2>
-    <p>运行详情按固定顺序展示，不因运行成败调整结构：</p>
-    <div class="flow">固定输入和受控变量
-  → 原始上下文与压缩结果
-  → 当次可见工具
-  → 模型决策
-  → 代码允许或拒绝
-  → 工具结果及来源
-  → 输出检查
-  → 最终结果和评测
-  → 时长、token 和成本</div>
-    <div id="runDetail" class="placeholder-block">
-      <p>等待发布数据：单次运行工件（<code>/showcase-data/runs/{id}.json</code>）发布后，此处按九段顺序渲染，并标注运行状态与有效性。</p>
-    </div>
-    <h3>批次运行索引</h3>
-    <div id="runsIndex" class="placeholder-block"><p>等待发布数据。</p></div>
+    <h1>用例结果 · 上下文压缩</h1>
+<h2 id="strategies">四种策略</h2>
+<p>固定 Agent 实现方式,对照四种上下文处理策略:<strong>full</strong>(全量)、<strong>recent-n</strong>(最近 N 条)、<strong>single-summary</strong>(一次性摘要)、<strong>budgeted</strong>(按预算选择压缩)。模型窗口容纳不下 full 时该策略显示「不适用」,不把截断输入冒充 full。</p>
+<div class="flow">原始上下文(有业务意义的数据,不凑长度)
+→ 分类:强制保留 / 可压缩 / 仅引用 / 干扰信息
+→ 按策略选择与压缩
+→ 工作上下文(≤ 预算)
+→ 保留率、召回率、引用完整率、净成本</div>
+    <h2 id="table">策略比较表(读实际工件)</h2>
+<div id="strategyTable"><div class="placeholder-block"><p>未运行:尚无已发布的上下文对照批次。</p></div></div>
+    <h2 id="pairs">正反例成对展示</h2>
+<p>同一用例的成功运行与失败运行并排展示,标注唯一变化的策略与来自校验器的失败原因;没有失败样本时显示「暂无失败样本」,且完整批次始终可查。</p><div id="contextPairs"><div class="placeholder-block"><p>未运行。</p></div></div>
   </main>
 </div>
 <script src="/docs/docs.js"></script>
+
 <script src="/showcase/shared.js"></script>
 <script>
 (function () {
   "use strict";
-  var runId = new URLSearchParams(location.search).get("id");
-
-  if (runId) {
-    fetch("/showcase-data/runs/" + encodeURIComponent(runId) + ".json", { cache: "no-store" })
-      .then(function (res) { if (!res.ok) throw new Error("no run"); return res.json(); })
-      .then(function (run) { document.getElementById("runDetail").innerHTML = SHOWCASE.renderRunDetail(run); })
-      .catch(function () {
-        document.getElementById("runDetail").innerHTML = SHOWCASE.renderRunDetail(null);
-      });
-  }
-
   fetch("/showcase-data/index.json", { cache: "no-store" })
     .then(function (res) { if (!res.ok) throw new Error("no index"); return res.json(); })
     .then(function (index) {
@@ -86,9 +71,10 @@
     })
     .then(function (res) { return res.ok ? res.json() : null; })
     .then(function (report) {
-      document.getElementById("runsIndex").innerHTML = SHOWCASE.renderRunsIndex(report);
+      document.getElementById("strategyTable").innerHTML = SHOWCASE.renderStrategyTable(report);
+      document.getElementById("contextPairs").innerHTML = SHOWCASE.renderContextPairs(report);
     })
-    .catch(function () { /* 索引缺位保持占位 */ });
+    .catch(function () { /* 缺数据保持占位 */ });
 })();
 </script>
 </body>

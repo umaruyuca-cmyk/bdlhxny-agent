@@ -8,10 +8,20 @@ import assert from "node:assert/strict";
  */
 
 const PUBLIC_PAGES = [
-  ["showcase", "index"], ["showcase", "results"], ["showcase", "runs"], ["showcase", "context"],
-  ["docs", "index"], ["docs", "agents"], ["docs", "skill"], ["docs", "tools"],
-  ["docs", "comparison"], ["docs", "eval"], ["docs", "cases"], ["docs", "results"],
+  ["", "index"],
+  ["showcase", "index"], ["showcase", "results"], ["showcase", "runs"],
+  ["experiment", "index"], ["experiment", "cases"], ["experiment", "reproduce"],
+  ["context", "index"], ["context", "design"], ["context", "results"],
+  ["judging", "index"], ["judging", "judge"], ["judging", "invalid"],
+  ["engine", "index"], ["engine", "loading"], ["engine", "catalog"],
+  ["engine", "governance"], ["engine", "guardrail"], ["engine", "tools"],
+  ["ops", "index"], ["ops", "run-api"], ["ops", "artifacts"], ["ops", "deploy"], ["ops", "roadmap"],
 ];
+
+async function readPublicPage(dir, page) {
+  const rel = dir ? `../public/${dir}/${page}.html` : `../public/${page}.html`;
+  return readFile(new URL(rel, import.meta.url), "utf8");
+}
 
 test("/lab 登录页与批次页存在，只在此处允许表单与运行 API 调用", async () => {
   const login = await readFile(new URL("../public/lab/login.html", import.meta.url), "utf8");
@@ -45,9 +55,14 @@ test("/lab 批次过程管理（任务四）：取消、预算与运行详情下
 
 test("公开页面（/showcase、/docs）不链接 /lab、不出现后端调用", async () => {
   for (const [dir, page] of PUBLIC_PAGES) {
-    const html = await readFile(new URL(`../public/${dir}/${page}.html`, import.meta.url), "utf8");
-    assert.ok(!html.includes('href="/lab'), `${dir}/${page}.html 不得链接私有运行台`);
-    assert.doesNotMatch(html, /\/api\/v1\//, `${dir}/${page}.html 不得出现后端 API`);
+    const html = await readPublicPage(dir, page);
+    assert.ok(!html.includes('href="/lab'), `${dir || "root"}/${page}.html 不得链接私有运行台`);
+    if (`${dir}/${page}` === "ops/run-api") {
+      // 私有 API 的文档页:正文列出端点是职责,但不得发起任何真实调用
+      assert.doesNotMatch(html, /fetch\(|XMLHttpRequest|axios/, "ops/run-api 文档页不得发起真实后端调用");
+    } else {
+      assert.doesNotMatch(html, /\/api\/v1\//, `${dir}/${page}.html 不得出现后端 API`);
+    }
     assert.doesNotMatch(html, /<input|<form|<textarea/, `${dir}/${page}.html 不得出现输入控件`);
   }
 });
@@ -67,7 +82,7 @@ test("登录令牌不出现在公开数据契约的禁止字段清单之外的�
   // showcase-data 由发布脚本做 FORBIDDEN_KEYS 扫描；这里守页面侧：
   // 公开页面脚本不读 sessionStorage/localStorage（无会话概念）
   for (const [dir, page] of PUBLIC_PAGES) {
-    const html = await readFile(new URL(`../public/${dir}/${page}.html`, import.meta.url), "utf8");
-    assert.doesNotMatch(html, /sessionStorage|localStorage/, `${dir}/${page}.html 无会话概念`);
+    const html = await readPublicPage(dir, page);
+    assert.doesNotMatch(html, /sessionStorage|localStorage/, `${dir || "root"}/${page}.html 无会话概念`);
   }
 });

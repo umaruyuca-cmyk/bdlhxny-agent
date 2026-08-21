@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>部署与边界 · 数据与运行 · Touchstone</title>
+<meta name="description" content="本地原生启动、云形态与公私边界。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/ops/">数据库与冻结数据</a></li>
+      <li><a href="/ops/run-api">私有运行 API</a></li>
+      <li><a href="/ops/artifacts">工件与发布</a></li>
+      <li><a href="/ops/deploy" class="active">部署与边界</a></li>
+      <li><a href="/ops/roadmap">路线图</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#boundary">公私边界</a></li>
+      <li><a href="#local">本地启动</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>部署与边界 · 数据与运行</h1>
+<h2 id="boundary">公私边界</h2>
+<p>公开部署只含静态站:镜像构建物理排除 <code>/lab</code>,公开页面零后端调用、无输入控件(契约测试守卫);评测与登录只在私有侧。<code>deploy/.env</code> 只在部署机,密钥不进镜像与日志。</p>
+    <h2 id="local">本地启动</h2>
+<p>三服务顺序:data(数据库隧道就绪后)→ engine(/ready 依赖 data)→ web(<code>npm run dev</code>);完整步骤、环境变量与排查速查见 <code>deploy/本地启动说明.md</code> 与 <code>deploy/README.md</code>(云形态:TLS 由网关终止,明文端口不直接暴露公网)。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

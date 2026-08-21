@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>治理中间件 · 引擎与治理 · Touchstone</title>
+<meta name="description" content="G1-G7 拦截链;工具调用唯一执行咽喉。">
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="模块导航">
+      <a href="/">首页</a>
+      <a href="/showcase/">实证展示</a>
+      <a href="/experiment/">对照实验</a>
+      <a href="/context/">上下文压缩</a>
+      <a href="/judging/">评判标准</a>
+      <a href="/engine/">引擎与治理</a>
+      <a href="/ops/">数据与运行</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>模块页面</h4>
+    <ul>
+      <li><a href="/engine/">Agent 循环</a></li>
+      <li><a href="/engine/loading">工具装载</a></li>
+      <li><a href="/engine/catalog">工具目录</a></li>
+      <li><a href="/engine/governance" class="active">治理中间件</a></li>
+      <li><a href="/engine/guardrail">输出护栏</a></li>
+      <li><a href="/engine/tools">工具清单</a></li>
+    </ul>
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#chain">G1-G7 拦截链</a></li>
+      <li><a href="#audit">审计码</a></li>
+    </ul>
+    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>治理中间件 · 引擎与治理</h1>
+<h2 id="chain">G1-G7 拦截链</h2>
+<p>工具调用的唯一执行咽喉,本地工具与 MCP 工具走同一条链:</p>
+<div class="flow">G1 可见性 → G2 只读 → G3 权限 → G4 预算 → G5 参数校验 → 执行 → G6 Observation 包装 → G7 审计记录</div>
+<p>任一前置拦截即终止并返回结构化拒绝(含稳定审计码);每次检查写入 <code>guardrail_checks</code>(plan/action/data_quality/response 四时点),拦截明细可查。</p>
+    <h2 id="audit">审计码</h2>
+<p>拦截带稳定审计码(如 <code>G3-AUTH-001</code> 未登录调用机主工具、<code>G4-BUDGET-001</code> 预算耗尽、<code>G5-SCHEMA-001</code> 参数不符);<code>tool_calls</code> 中被拦截的调用记 <code>DENIED</code> 并挂审计码。</p>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+
+</body>
+</html>

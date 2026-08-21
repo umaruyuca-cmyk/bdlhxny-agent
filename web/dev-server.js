@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { redirectFor } from "./scripts/redirect-map.mjs";
 
 const host = process.env.HOST || "127.0.0.1";
 const port = Number.parseInt(process.env.PORT || "8082", 10);
@@ -35,19 +36,30 @@ const server = http.createServer(async (request, response) => {
 });
 
 async function serveStatic(requestPath, request, response) {
-  // / 指向实证层索引；/showcase、/docs、/lab 的 {page} 自动补 .html
-  if (requestPath === "/docs" || requestPath === "/showcase" || requestPath === "/lab") {
+  // 旧路径 301(任务六 §11:/docs/* 页面与 /showcase/context 迁至七模块新位置;
+  // /docs/ 下的 css/js 资产保留原位,不在映射内)
+  const redirect = redirectFor(requestPath);
+  if (redirect) {
+    response.writeHead(301, { Location: redirect });
+    response.end();
+    return;
+  }
+  // 模块前缀(七模块):无尾斜杠 302 到模块首页;{page} 自动补 .html
+  const MODULE_PREFIXES = ["/showcase", "/lab", "/experiment", "/context", "/judging", "/engine", "/ops"];
+  if (MODULE_PREFIXES.includes(requestPath)) {
     response.writeHead(302, { Location: requestPath + "/" });
     response.end();
     return;
   }
   let target = requestPath;
-  if (requestPath === "/") target = "/showcase/index.html";
-  else if (requestPath === "/showcase/" || requestPath === "/docs/" || requestPath === "/lab/") target = requestPath + "index.html";
-  else if (requestPath.startsWith("/showcase/") || requestPath.startsWith("/docs/")) {
-    const prefix = requestPath.startsWith("/showcase/") ? "/showcase/" : "/docs/";
-    const pagePath = requestPath.slice(prefix.length);
-    if (!pagePath.includes(".")) target = prefix + pagePath + ".html";
+  const DIRECTORY_INDEX = ["/showcase/", "/lab/", "/experiment/", "/context/", "/judging/", "/engine/", "/ops/"];
+  if (requestPath === "/") target = "/index.html";
+  else if (DIRECTORY_INDEX.includes(requestPath)) target = requestPath + "index.html";
+  else {
+    const modulePrefix = DIRECTORY_INDEX.find((prefix) => requestPath.startsWith(prefix));
+    if (modulePrefix && !requestPath.slice(modulePrefix.length).includes(".")) {
+      target = requestPath + ".html";
+    }
   }
   const decodedPath = decodeURIComponent(target);
   const relativePath = decodedPath.replace(/^[/\\]+/, "");
