@@ -1,5 +1,16 @@
 # 部署
 
+## 密钥管理
+
+- `deploy/.env` 只在本机使用，已被 `.gitignore` 覆盖，**永不提交**；真实密钥
+  （数据库密码、`DATA_INTERNAL_TOKEN`、`LLM_API_KEY`）建议从密码管理器取出后
+  现场注入，不在工作区长期明文存放；
+- 云环境密钥走托管平台的 secret 注入，不写进镜像、compose 文件或命令记录；
+- 任何密钥疑似泄漏（误提交、打包、录屏、共享）立即轮换：`LLM_API_KEY` 在厂商
+  控制台重置；`POSTGRES_PASSWORD` 与 `DATA_INTERNAL_TOKEN` 轮换时需同步更新
+  data 与 engine 两侧环境后滚动重启；
+- `.env.example` / `.env.ci` 只允许占位值。
+
 ## 本地完整环境
 
 包含 PostgreSQL、`data`、`engine` 和 `web`：
