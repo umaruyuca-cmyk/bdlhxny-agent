@@ -46,6 +46,7 @@ services:
     image: ${IMAGE_REGISTRY:?IMAGE_REGISTRY is required}/web:${IMAGE_TAG:-latest}
     restart: unless-stopped
     ports:
+      # 明文 HTTP：公网流量必须在网关/负载均衡终止 TLS 后转发到本端口（见 deploy/README.md 云环境）
       - "${CONSOLE_BIND:-0.0.0.0}:${CONSOLE_PORT:-8082}:8082"
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8082/docs/"]

@@ -42,6 +42,10 @@ docker compose --env-file deploy/.env.cloud -f deploy/docker-compose.cloud.yml u
 
 云环境需要设置 `IMAGE_REGISTRY`、`IMAGE_TAG`、`DATABASE_URL`、`DATABASE_USER`、`DATABASE_PASSWORD`、`DATA_INTERNAL_TOKEN`、`LLM_API_KEY` 和 `GIT_COMMIT`。数据服务和运行服务应放在私有网络；只让展示站或经过登录保护的反向代理暴露公网端口。
 
+**TLS 强制要求**：云端 web 默认 `CONSOLE_BIND=0.0.0.0` 提供的是明文 HTTP，公网流量
+必须在网关/负载均衡终止 TLS 后再转发到该端口。不要把 `CONSOLE_PORT` 的明文端口
+直接暴露到公网；网关需配置证书并强制 HTTP→HTTPS 跳转。
+
 ## 纯公开展示
 
 ```powershell
