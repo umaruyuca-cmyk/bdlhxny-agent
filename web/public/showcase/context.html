@@ -46,6 +46,8 @@
   → 按策略选择与压缩
   → 工作上下文（≤ 预算）
   → 保留率、召回率、引用完整率、净成本</div>
+    <h3>策略比较表（读实际工件）</h3>
+    <div id="strategyTable"><div class="placeholder-block"><p>未运行：上下文构建器接入中（P3-2）。</p></div></div>
     <h2 id="list">用例列表</h2>
     <div id="contextList" class="placeholder-block">
       <p>未运行：上下文构建器接入中。接入后此处显示每个用例的原始 token、工作 token、压缩比例、强制项保留率、关键事实正确率与四类时长。</p>
@@ -56,5 +58,24 @@
   </main>
 </div>
 <script src="/docs/docs.js"></script>
+<script src="/showcase/shared.js"></script>
+<script>
+(function () {
+  "use strict";
+  fetch("/showcase-data/index.json", { cache: "no-store" })
+    .then(function (res) { if (!res.ok) throw new Error("no index"); return res.json(); })
+    .then(function (index) {
+      var latest = index.latest_batch;
+      if (!latest) throw new Error("no batch");
+      return fetch("/showcase-data/batches/" + latest.batch_id + "/report.json", { cache: "no-store" });
+    })
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (report) {
+      document.getElementById("strategyTable").innerHTML = SHOWCASE.renderStrategyTable(report);
+      document.getElementById("contextPairs").innerHTML = SHOWCASE.renderContextPairs(report);
+    })
+    .catch(function () { /* 缺数据保持占位 */ });
+})();
+</script>
 </body>
 </html>

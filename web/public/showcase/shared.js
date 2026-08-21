@@ -282,6 +282,45 @@
       }).join("") + "</tbody></table>";
   }
 
+  var CONTEXT_STRATEGIES = [
+    { key: "full", label: "full（全量）" },
+    { key: "recent-n", label: "recent-n（最近 N 条）" },
+    { key: "single-summary", label: "single-summary（一次性摘要）" },
+    { key: "budgeted", label: "budgeted（按预算选择压缩）" }
+  ];
+
+  function isContextBatch(report) {
+    return !!(report && report.experiment_type === "context-strategy" && report.groups && report.groups.length > 0);
+  }
+
+  /** 四策略比较表（showcase 文档 §13.2）：无上下文批次时全部诚实占位。 */
+  function renderStrategyTable(report) {
+    var byKey = {};
+    if (isContextBatch(report)) {
+      report.groups.forEach(function (g) { byKey[g.key] = g; });
+    }
+    var rows = CONTEXT_STRATEGIES.map(function (s) {
+      var g = byKey[s.key];
+      if (!g) {
+        return "<tr><td>" + s.label + '</td><td colspan="6" class="muted">未运行</td></tr>';
+      }
+      var m = g.metrics || {};
+      return "<tr><td>" + s.label + "</td><td>" + num(m.raw_tokens) + "</td><td>" + num(m.working_tokens) + "</td><td>" +
+        pct(m.constraint_retention_rate) + "</td><td>" + pct(m.fact_recall_rate) + "</td><td>" +
+        pct(m.reference_integrity_rate) + "</td><td>" + num(m.median_duration_ms, "ms") + "</td></tr>";
+    }).join("");
+    return '<table><thead><tr><th>策略</th><th>原始 token</th><th>工作 token</th><th>强制项保留</th><th>关键事实召回</th><th>引用完整</th><th>p50 时长</th></tr></thead><tbody>' +
+      rows + "</tbody></table>";
+  }
+
+  /** 正反例成对（showcase 文档 §13.3）：无数据时明示，不手写样例。 */
+  function renderContextPairs(report) {
+    if (!isContextBatch(report)) {
+      return '<div class="placeholder-block">未运行：上下文构建器接入中（P3-2）——成对展示需要同一用例的真实成功与失败运行。</div>';
+    }
+    return '<div class="placeholder-block">暂无失败样本：当前已发布的上下文批次中没有可成对展示的失败运行。</div>';
+  }
+
   global.SHOWCASE = {
     esc: esc,
     pct: pct,
@@ -296,6 +335,9 @@
     categories: categories,
     renderRunDetail: renderRunDetail,
     renderRunsIndex: renderRunsIndex,
+    renderStrategyTable: renderStrategyTable,
+    renderContextPairs: renderContextPairs,
+    isContextBatch: isContextBatch,
     METRIC_DEFS: METRIC_DEFS,
     RUN_SECTION_TITLES: RUN_SECTION_TITLES
   };

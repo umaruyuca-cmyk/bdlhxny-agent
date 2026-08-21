@@ -161,3 +161,30 @@ test("运行缺失与下钻索引：未发布明示，有 run_ids 时给链接",
   const html = S.renderRunsIndex(withIds);
   assert.match(html, /\/showcase\/runs\?id=b1-full-research-01-1/);
 });
+
+/* ── 上下文对照页渲染 ───────────────────────────────────── */
+
+test("非上下文批次：四策略行全部未运行，正反例明示接入中", () => {
+  const table = S.renderStrategyTable(REPORT); // agent-implementation 批次
+  for (const label of ["full（全量）", "recent-n（最近 N 条）", "single-summary（一次性摘要）", "budgeted（按预算选择压缩）"]) {
+    assert.match(table, new RegExp(label.replace(/[()]/g, "\\$&")));
+  }
+  assert.equal((table.match(/未运行/g) || []).length, 4);
+  assert.match(S.renderContextPairs(REPORT), /P3-2/);
+});
+
+test("上下文批次：策略行渲染实测值", () => {
+  const contextReport = {
+    experiment_type: "context-strategy",
+    groups: [
+      { key: "budgeted", metrics: { raw_tokens: 42800, working_tokens: 12150, constraint_retention_rate: 1, fact_recall_rate: 0.95, reference_integrity_rate: 1, median_duration_ms: 4200 } },
+    ],
+  };
+  const table = S.renderStrategyTable(contextReport);
+  assert.match(table, /42800/);
+  assert.match(table, /12150/);
+  assert.match(table, /100%/);
+  assert.match(table, /4200ms/);
+  assert.equal((table.match(/未运行/g) || []).length, 3); // 其余三策略未运行
+  assert.match(S.renderContextPairs(contextReport), /暂无失败样本/);
+});
