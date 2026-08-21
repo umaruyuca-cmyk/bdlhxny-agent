@@ -1099,6 +1099,13 @@ SET LOCAL statement_timeout = '5min';
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
+-- 修复：fixture_tool_responses.arguments_hash / response_hash 为 NOT NULL，
+-- 但下面 INSERT 不显式赋值（hash 由后续 UPDATE 统一从 JSONB 派生）。
+-- 若保持 NOT NULL，INSERT 会先于 UPDATE 触发约束而整段回滚。
+-- 因此 INSERT 前临时放开，UPDATE 回填后再恢复，最终 schema 不变。
+ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN arguments_hash DROP NOT NULL;
+ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN response_hash DROP NOT NULL;
+
 -- A/B 评测冻结工具数据（唯一真源）：三组对照共用，隔离工具执行质量差异。
 -- call_key 规则：基准返回为工具名；标的覆盖为「工具名:标的代码」。
 -- engine 经 data 服务 /internal/v1/tool-fixtures/ab-eval 读取。
@@ -1171,6 +1178,10 @@ UPDATE touchstone.fixture_tool_responses
 SET arguments_hash = 'sha256:' || encode(digest(arguments::text, 'sha256'), 'hex'),
     response_hash  = 'sha256:' || encode(digest(response::text, 'sha256'), 'hex')
 WHERE fixture_set_id = 'ab-eval' AND fixture_set_version = 1;
+
+-- 回填完成，恢复 NOT NULL（最终 schema 与原设计一致）。
+ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN arguments_hash SET NOT NULL;
+ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN response_hash SET NOT NULL;
 
 INSERT INTO touchstone.database_changes (script_name, description)
 VALUES ('08-seed-tool-fixtures.sql', '写入 A/B 评测冻结工具返回（ab-eval 数据集，18 条固定返回）');
