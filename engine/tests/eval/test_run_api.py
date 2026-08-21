@@ -78,6 +78,13 @@ def test_health_is_public(client: TestClient) -> None:
     assert response.json()["service"] == "touchstone-run-api"
 
 
+def test_interactive_docs_are_disabled(client: TestClient) -> None:
+    """生产最小暴露：私有服务不开放 /docs 与 OpenAPI schema。"""
+    assert client.get("/docs").status_code == 404
+    assert client.get("/redoc").status_code == 404
+    assert client.get("/openapi.json").status_code == 404
+
+
 def test_requires_session_token(client: TestClient) -> None:
     assert client.get("/api/v1/cases").status_code == 401
 

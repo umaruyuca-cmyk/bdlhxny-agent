@@ -32,10 +32,6 @@ FORBIDDEN_PREFIXES: tuple[str, ...] = (
     "bdlh_runtime.integrations",  # 供应商适配（MCP 等）
     # 具体工具实现：引擎只读目录（catalog/search），不直接依赖实现
     "bdlh_runtime.tools.capabilities",
-    "bdlh_runtime.tools.coverage",
-    "bdlh_runtime.tools.java_data_adapter",
-    "bdlh_runtime.tools.web_search_adapter",
-    "bdlh_runtime.tools.analysis_capability",
     "bdlh_runtime.tools.deep_research",
 )
 

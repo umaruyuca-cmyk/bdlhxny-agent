@@ -23,7 +23,14 @@ from bdlh_runtime.evaluation.ab_eval import _report_payload, load_cases, run_ab_
 
 ARTIFACTS_DIR = Path(os.getenv("ARTIFACTS_DIR", "/app/artifacts"))
 
-app = FastAPI(title="Touchstone Private Run API", version="1")
+app = FastAPI(
+    title="Touchstone Private Run API",
+    version="1",
+    # 生产最小暴露：私有服务不开放交互文档与 OpenAPI schema
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
+)
 _JOBS: dict[str, dict[str, Any]] = {}
 _BATCH_SLOTS = threading.BoundedSemaphore(max(1, int(os.getenv("MAX_CONCURRENT_BATCHES", "1"))))
 
