@@ -4,7 +4,8 @@ services:
   web:
     build:
       context: ../web
-      dockerfile: Dockerfile
+      # 公开镜像：排除私有 /lab 页面（见 web/Dockerfile.public）
+      dockerfile: Dockerfile.public
     container_name: touchstone-showcase
     restart: unless-stopped
     ports:

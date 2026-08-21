@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>内部运行台 · Touchstone</title>
+<link rel="stylesheet" href="/docs/docs.css">
+<style>
+  .lab-main { max-width: 860px; margin: 0 auto; padding: 30px 22px 80px; }
+  .lab-main h1 { font-size: 22px; }
+  .lab-toolbar { display: flex; gap: 10px; align-items: center; margin: 12px 0 20px; font-size: 14px; }
+  .lab-toolbar button { padding: 6px 14px; border: 1px solid #d8dee9; border-radius: 8px; background: #fff; cursor: pointer; }
+  .lab-form { border: 1px solid #e6eaf1; border-radius: 12px; padding: 18px 20px; background: #fff; }
+  .lab-form fieldset { border: 1px solid #eef1f6; border-radius: 10px; margin: 0 0 14px; padding: 10px 14px; }
+  .lab-form legend { font-size: 13px; color: #5b6575; padding: 0 6px; }
+  .case-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 14px; font-size: 13.5px; }
+  .case-list label { display: block; }
+  .lab-row { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; align-items: center; }
+  .lab-row label { display: flex; align-items: center; gap: 6px; }
+  .lab-row input, .lab-row select { padding: 5px 8px; border: 1px solid #d8dee9; border-radius: 7px; font-size: 13.5px; }
+  .lab-submit { padding: 9px 26px; border: 0; border-radius: 9px; background: #1f2d3d; color: #fff; font-size: 14px; cursor: pointer; }
+  .lab-submit:disabled { background: #98a1af; cursor: not-allowed; }
+  .job-box { margin-top: 18px; border: 1px dashed #d8dee9; border-radius: 10px; padding: 14px 18px; font-size: 14px; }
+  .job-box .ok { color: #2c7a4b; } .job-box .bad { color: #b23b3b; }
+  .lab-note { color: #77808f; font-size: 12.5px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main class="lab-main">
+  <h1>内部运行台</h1>
+  <p style="color:#5b6575;font-size:14px">项目所有者按固定题号发起 Agent 对照批次。请求只接受题号与实验配置，不接受问题正文、提示词或自定义工具。</p>
+  <div class="lab-toolbar">
+    <span id="whoami">…</span>
+    <button type="button" id="logoutBtn">退出登录</button>
+  </div>
+
+  <form class="lab-form" id="batchForm">
+    <fieldset>
+      <legend>固定题号（全不选=全部题目）</legend>
+      <div class="case-list" id="caseList"><span style="color:#98a1af">加载题库…</span></div>
+    </fieldset>
+    <div class="lab-row">
+      <label>每题次数 <select id="runs"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+      <label><input type="checkbox" id="includeReact" checked> 含 LangGraph ReAct 组</label>
+      <label>模型 <input id="model" placeholder="缺省取服务端 LLM_MODEL" style="width:220px"></label>
+      <button class="lab-submit" type="submit" id="submitBtn">发起批次</button>
+    </div>
+    <p class="lab-note">批次在服务端串行执行（并发上限 1）；完成后再经发布脚本投影到公开实证层。</p>
+  </form>
+
+  <div class="job-box" id="jobBox" hidden></div>
+</main>
+<script>
+(function () {
+  "use strict";
+  var RUN_API = window.__RUN_API__ || "http://127.0.0.1:8090";
+  var token = sessionStorage.getItem("lab_token");
+  if (!token) { location.href = "/lab/login.html"; return; }
+
+  function api(path, options) {
+    return fetch(RUN_API + path, Object.assign({
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    }, options || {})).then(function (res) {
+      if (res.status === 401) { location.href = "/lab/login.html"; throw new Error("会话失效"); }
+      return res.json().then(function (body) { return { status: res.status, body: body }; });
+    });
+  }
+
+  api("/api/v1/cases").then(function (outcome) {
+    if (outcome.status !== 200) throw new Error("题库加载失败");
+    var box = document.getElementById("caseList");
+    box.innerHTML = outcome.body.map(function (c) {
+      return '<label><input type="checkbox" value="' + c.id + '"> ' + c.id + " · " + (c.title || c.message || "") + "</label>";
+    }).join("");
+  }).catch(function (err) {
+    document.getElementById("caseList").innerHTML = '<span class="bad">题库加载失败：' + err.message + "（检查隧道与 data 服务）</span>";
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", function () {
+    api("/api/v1/logout", { method: "POST" }).catch(function () {});
+    sessionStorage.removeItem("lab_token");
+    location.href = "/lab/login.html";
+  });
+
+  document.getElementById("batchForm").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var caseIds = Array.prototype.slice.call(document.querySelectorAll("#caseList input:checked")).map(function (el) { return el.value; });
+    var payload = {
+      case_ids: caseIds.length ? caseIds : null,
+      runs: Number(document.getElementById("runs").value),
+      include_react: document.getElementById("includeReact").checked,
+    };
+    var model = document.getElementById("model").value.trim();
+    if (model) payload.model = model;
+
+    var btn = document.getElementById("submitBtn");
+    var box = document.getElementById("jobBox");
+    btn.disabled = true; btn.textContent = "提交中…";
+    box.hidden = false; box.textContent = "提交批次…";
+
+    api("/api/v1/eval-batches", { method: "POST", body: JSON.stringify(payload) }).then(function (outcome) {
+      if (outcome.status === 429) throw new Error("已有批次在运行，请等待完成");
+      if (outcome.status === 400) throw new Error("请求被拒绝：" + JSON.stringify(outcome.body));
+      if (outcome.status !== 200) throw new Error("提交失败（" + outcome.status + "）");
+      poll(outcome.body.job_id, outcome.body.batch_id);
+    }).catch(function (err) {
+      box.innerHTML = '<span class="bad">' + err.message + "</span>";
+      btn.disabled = false; btn.textContent = "发起批次";
+    });
+  });
+
+  function poll(jobId, batchId) {
+    var btn = document.getElementById("submitBtn");
+    var box = document.getElementById("jobBox");
+    api("/api/v1/jobs/" + jobId).then(function (outcome) {
+      var job = outcome.body;
+      if (job.status === "running") {
+        box.textContent = "批次执行中（batch " + batchId.slice(0, 8) + "）… 每题每组真实调用模型，18 题 × N 次通常需要数分钟";
+        setTimeout(function () { poll(jobId, batchId); }, 5000);
+        return;
+      }
+      btn.disabled = false; btn.textContent = "发起批次";
+      if (job.status === "done") {
+        var cases = job.report && job.report.cases ? job.report.cases.length : "?";
+        box.innerHTML = '<span class="ok">批次完成</span>：batch ' + batchId.slice(0, 8) +
+          " · " + cases + " 题。执行 <code>npm run publish:showcase -- --git-commit &lt;sha&gt;</code> 后结果进入公开实证层。" +
+          ' <a href="/showcase/results">查看已发布结果</a>';
+      } else {
+        box.innerHTML = '<span class="bad">批次失败</span>：' + (job.error || "未知错误");
+      }
+    }).catch(function (err) {
+      box.innerHTML = '<span class="bad">状态查询失败：' + err.message + "</span>";
+      btn.disabled = false; btn.textContent = "发起批次";
+    });
+  }
+})();
+</script>
+</body>
+</html>

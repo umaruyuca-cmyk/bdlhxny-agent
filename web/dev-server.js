@@ -35,8 +35,8 @@ const server = http.createServer(async (request, response) => {
 });
 
 async function serveStatic(requestPath, request, response) {
-  // / 指向实证层索引；/showcase 与 /docs 的 {page} 自动补 .html
-  if (requestPath === "/docs" || requestPath === "/showcase") {
+  // / 指向实证层索引；/showcase、/docs、/lab 的 {page} 自动补 .html
+  if (requestPath === "/docs" || requestPath === "/showcase" || requestPath === "/lab") {
     response.writeHead(302, { Location: requestPath + "/" });
     response.end();
     return;
