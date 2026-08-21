@@ -156,6 +156,8 @@ class RunJudgment:
     rounds: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    # API 未回 usage、token 为 chars//4 近似时置 True（指标口径标注）。
+    tokens_estimated: bool = False
     duration_ms: int = 0
     # 异常
     error: str | None = None
@@ -210,7 +212,8 @@ class ABReport:
 # ── 运行函数 ────────────────────────────────────────────────────────────
 
 
-def _extract_treatment_tokens(result: AgentResult) -> tuple[int, int]:
+def _extract_treatment_tokens(result: AgentResult) -> tuple[int, int, bool]:
+    """提取 (prompt, completion, 是否近似估算)；估算值不与真实 usage 混用口径。"""
     prompt, completion = 0, 0
     for msg in result.messages:
         # langchain 0.2+: usage_metadata typed object
@@ -236,8 +239,8 @@ def _extract_treatment_tokens(result: AgentResult) -> tuple[int, int]:
         # Fallback: estimate from message text length
         total_chars = sum(len(str(getattr(m, "content", "") or "")) for m in result.messages)
         approx = max(1, total_chars // 4)
-        return 0, approx
-    return prompt, completion
+        return 0, approx, True
+    return prompt, completion, False
 
 
 def _count_rounds(messages: list[Any]) -> int:
@@ -296,7 +299,8 @@ def _judge_baseline(case: ABCase, result: BaselineResult, executor: Any, catalog
     j.rounds = result.rounds
     j.prompt_tokens = result.prompt_tokens
     j.completion_tokens = result.completion_tokens
-    # 答案层检查：数字接地基于执行器实际返回（canned 或真实 Observation）
+    j.tokens_estimated = result.tokens_estimated
+    # 答案层检查：数字接地基于执行器实际返回（冻结或真实 Observation）
     obs_texts = [json.dumps(r, ensure_ascii=False, default=str) for _n, _a, r in executor.results]
     if obs_texts:
         j.number_hallucinations = [v.detail for v in _number_check.check(result.answer, obs_texts)]
@@ -322,6 +326,7 @@ def _judge_react(
     j.rounds = result.rounds
     j.prompt_tokens = result.prompt_tokens
     j.completion_tokens = result.completion_tokens
+    j.tokens_estimated = result.tokens_estimated
     obs_texts = [json.dumps(r, ensure_ascii=False, default=str) for _n, _a, r in executor.results]
     if obs_texts:
         j.number_hallucinations = [v.detail for v in _number_check.check(result.answer, obs_texts)]
@@ -348,9 +353,10 @@ def _judge_treatment(
     else:
         j.tool_correct = successful == set(case.expected_tools)
     j.rounds = _count_rounds(agent_result.messages)
-    p, c = _extract_treatment_tokens(agent_result)
+    p, c, estimated = _extract_treatment_tokens(agent_result)
     j.prompt_tokens = p
     j.completion_tokens = c
+    j.tokens_estimated = estimated
     # 答案层检查（用 guardrail 修正后的答案；数字接地基于执行器实际返回，与其他两组同口径）
     fixed_answer = guard_report.fixed_answer
     obs_texts = [json.dumps(r, ensure_ascii=False, default=str) for _n, _a, r in executor.results]
@@ -715,6 +721,7 @@ def _agg_runs(runs: list[RunJudgment]) -> dict[str, Any]:
         "correct": sum(1 for r in runs if r.tool_correct),
         "hallucinated": sum(1 for r in runs if r.hallucinated_tools or r.forbidden_leak),
         "total": len(runs),
+        "estimated_token_runs": sum(1 for r in runs if r.tokens_estimated),
         "duration_p50_ms": round(statistics.median(durations)) if durations else 0,
         "duration_p95_ms": durations[p95_index] if durations else 0,
     }

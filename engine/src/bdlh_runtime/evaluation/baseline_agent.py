@@ -23,6 +23,8 @@ class BaselineResult:
     rounds: int = 0
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    # API 未回 usage、token 为 chars//4 近似时置 True，指标口径可区分。
+    tokens_estimated: bool = False
     error: str | None = None
     # LangGraph 官方 ReAct 对照组专用：模型实际发起的 tool_calls 名单。
     # ToolNode 会拦截非法工具名（不执行），只有这份名单能完整记录幻觉尝试；
@@ -79,14 +81,19 @@ def _extract_text(response: Any) -> str:
     return "".join(parts)
 
 
-def _extract_tokens(response: Any) -> tuple[int, int]:
+def _extract_tokens(response: Any) -> tuple[int, int, bool]:
+    """提取 (prompt, completion, 是否近似估算)。
+
+    API 不回 usage 时按文本长度近似（chars//4）并置估算标记；
+    真实值与近似值不混用同一口径。
+    """
     # langchain 0.2+: usage_metadata typed object
     um = getattr(response, "usage_metadata", None)
     if um is not None:
         p = int(getattr(um, "input_tokens", 0) or 0)
         c = int(getattr(um, "output_tokens", 0) or 0)
         if p > 0 or c > 0:
-            return p, c
+            return p, c, False
     # response_metadata.token_usage (OpenAI format)
     meta = getattr(response, "response_metadata", None)
     if isinstance(meta, dict):
@@ -95,11 +102,11 @@ def _extract_tokens(response: Any) -> tuple[int, int]:
             p = int(usage.get("prompt_tokens", 0) or 0)
             c = int(usage.get("completion_tokens", 0) or 0)
             if p > 0 or c > 0:
-                return p, c
+                return p, c, False
     # Fallback: estimate from response text (rough, but captures relative diff)
     text = _extract_text(response)
     approx = max(1, len(text) // 4)
-    return 0, approx
+    return 0, approx, True
 
 
 #: 基线系统提示词（单一真源：裸调用与 ReAct 对照共用，ab_eval 复用）
@@ -136,15 +143,17 @@ async def naive_run(
     total_prompt = 0
     total_completion = 0
     rounds = 0
+    tokens_estimated = False
 
     try:
         for _ in range(max_rounds):
             rounds += 1
             response = await bound.ainvoke(messages)
             messages.append(response)
-            p, c = _extract_tokens(response)
+            p, c, estimated = _extract_tokens(response)
             total_prompt += p
             total_completion += c
+            tokens_estimated = tokens_estimated or estimated
 
             calls = _extract_tool_calls(response)
             if not calls:
@@ -154,6 +163,7 @@ async def naive_run(
                     rounds=rounds,
                     prompt_tokens=total_prompt,
                     completion_tokens=total_completion,
+                    tokens_estimated=tokens_estimated,
                 )
             for call_id, name, args in calls:
                 result = await executor(name, args)
@@ -171,6 +181,7 @@ async def naive_run(
             rounds=rounds,
             prompt_tokens=total_prompt,
             completion_tokens=total_completion,
+            tokens_estimated=tokens_estimated,
             error=str(exc),
         )
 
@@ -180,4 +191,5 @@ async def naive_run(
         rounds=rounds,
         prompt_tokens=total_prompt,
         completion_tokens=total_completion,
+        tokens_estimated=tokens_estimated,
     )

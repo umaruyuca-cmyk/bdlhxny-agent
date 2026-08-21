@@ -107,15 +107,18 @@ async def react_official_run(
         answer = "（步数耗尽）"
     prompt_tokens = 0
     completion_tokens = 0
+    tokens_estimated = False
     for m in ai_messages:
-        p, c = _extract_tokens(m)
+        p, c, estimated = _extract_tokens(m)
         prompt_tokens += p
         completion_tokens += c
+        tokens_estimated = tokens_estimated or estimated
     return BaselineResult(
         answer=answer,
         tool_calls=list(executor.call_log),
         rounds=max(0, len(ai_messages) - assistant_history),
         prompt_tokens=prompt_tokens,
         completion_tokens=completion_tokens,
+        tokens_estimated=tokens_estimated,
         attempted_tools=[str(call.get("name")) for m in ai_messages for call in (m.tool_calls or [])],
     )
