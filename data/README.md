@@ -32,6 +32,33 @@ Data 服务不会建表或修改表结构。首次部署前，维护者必须按
 mvn -B -ntp test
 ```
 
+## 本地开发（经 SSH 隧道）
+
+数据源配置没有默认值，缺 `DATABASE_URL` / `DATABASE_USER` / `DATABASE_PASSWORD`
+任一变量时启动直接失败（fail-fast）。本地开发的标准做法是先开 SSH 隧道连到云端，
+再显式传变量启动。
+
+隧道由本机脚本建立（属本机工件，含服务器地址与账号，**不放入仓库**）：
+本地 `5432` 转发云端 PostgreSQL、本地 `18080` 转发云端 data 服务 8080。
+隧道窗口关闭即断开。
+
+隧道就绪后启动 data：
+
+```powershell
+$env:DATABASE_URL = "jdbc:postgresql://127.0.0.1:5432/touchstone"
+$env:DATABASE_USER = "touchstone"
+$env:DATABASE_PASSWORD = "<隧道目标库密码>"
+$env:DATA_INTERNAL_TOKEN = "<内部令牌>"
+mvn spring-boot:run
+```
+
+engine 本地连云端 data 时设：
+
+```powershell
+$env:DATA_API_BASE_URL = "http://127.0.0.1:18080/internal/v1"
+$env:DATA_INTERNAL_TOKEN = "<内部令牌>"
+```
+
 ## 内部鉴权
 
 所有 `/internal/v1/**` 接口都要求 `X-Internal-Token`。未配置
