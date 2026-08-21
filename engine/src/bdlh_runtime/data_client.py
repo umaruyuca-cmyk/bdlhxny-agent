@@ -30,6 +30,18 @@ class DataClient:
             raise DataServiceError("data service returned an invalid case catalog")
         return payload
 
+    def get_tool_catalog(self) -> dict[str, Any]:
+        payload = self._request("GET", "/tool-catalog")
+        if not isinstance(payload, dict):
+            raise DataServiceError("data service returned an invalid tool catalog")
+        return payload
+
+    def get_tool_fixtures(self, fixture_set_id: str, *, version: int = 1) -> dict[str, Any]:
+        payload = self._request("GET", f"/tool-fixtures/{fixture_set_id}?version={version}")
+        if not isinstance(payload, dict):
+            raise DataServiceError("data service returned an invalid tool fixture set")
+        return payload
+
     def create_batch(self, *, name: str, fixed_conditions: dict[str, Any]) -> str:
         payload = self._request(
             "POST",

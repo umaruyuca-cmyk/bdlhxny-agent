@@ -22,7 +22,8 @@ db/
    │  ├─ 03-create-agent-comparison-tables.sql
    │  ├─ 04-seed-agent-and-context-catalog.sql
    │  ├─ 05-create-execution-detail-tables.sql
-   │  └─ 06-create-accounts-tables.sql
+   │  ├─ 06-create-accounts-tables.sql
+   │  └─ 07-create-tool-catalog-tables.sql
    ├─ changes/
    │  └─ README.md
    ├─ queries/

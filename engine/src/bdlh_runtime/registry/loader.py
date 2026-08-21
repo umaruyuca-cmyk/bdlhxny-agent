@@ -6,11 +6,19 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from bdlh_runtime.infra.errors import ConfigurationError
 
 from .defaults import DEFAULT_RUNTIME_ALLOWED_OPERATIONS
-from .models import RegistrySnapshot
-from .store import RegistryStore
+from .models import (
+    CapabilityRecord,
+    OperationRecord,
+    RegistrySnapshot,
+    SkillRecord,
+    ToolsetRecord,
+)
+from .store import InMemoryRegistryStore, RegistryStore
 
 
 def load_and_validate(
@@ -24,6 +32,54 @@ def load_and_validate(
     _validate_capabilities(snapshot)
     _validate_skills(snapshot, runtime_allowed=allowed)
     return snapshot
+
+
+def load_and_validate_payload(payload: dict[str, Any]) -> RegistrySnapshot:
+    """从 data 服务返回的工具目录 JSON 构建快照并执行与启动一致的校验。
+
+    JSON 结构与 ``GET /internal/v1/tool-catalog`` 一致；结构异常按
+    ``ConfigurationError`` fail-fast，不做兜底目录。
+    """
+    store = InMemoryRegistryStore()
+    try:
+        store.operations = [
+            OperationRecord(str(item["code"]), str(item["description"])) for item in payload["operations"]
+        ]
+        store.toolsets = [ToolsetRecord(str(item["name"]), str(item["description"])) for item in payload["toolsets"]]
+        store.capabilities = [
+            CapabilityRecord(
+                name=str(item["name"]),
+                description=str(item["description"]),
+                domain=str(item["domain"]),
+                adapter=str(item["adapter"]),
+                read_only=bool(item["read_only"]),
+                requires_authenticated_user=bool(item["requires_authenticated_user"]),
+                required_arguments=frozenset(str(arg) for arg in item.get("required_arguments") or []),
+                depends_on=frozenset(str(dep) for dep in item.get("depends_on") or []),
+                timeout_seconds=int(item.get("timeout_seconds") or 20),
+                enabled=bool(item.get("enabled", True)),
+                operations=frozenset(str(op) for op in item.get("operations") or []),
+                toolsets=frozenset(str(toolset) for toolset in item.get("toolsets") or []),
+            )
+            for item in payload["capabilities"]
+        ]
+        store.skills = [
+            SkillRecord(
+                skill_id=str(item["skill_id"]),
+                skill_version=str(item["skill_version"]),
+                domain=str(item["domain"]),
+                status=str(item["status"]),
+                enabled=bool(item["enabled"]),
+                operations=frozenset((str(row["code"]), bool(row["required"])) for row in item.get("operations") or []),
+                capabilities=frozenset(
+                    (str(row["capability"]), bool(row["required"])) for row in item.get("capabilities") or []
+                ),
+            )
+            for item in payload["skills"]
+        ]
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ConfigurationError(f"tool catalog payload is invalid: {exc}") from exc
+    return load_and_validate(store)
 
 
 def _validate_capabilities(snapshot: RegistrySnapshot) -> None:

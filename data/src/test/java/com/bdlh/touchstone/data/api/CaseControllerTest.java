@@ -37,7 +37,8 @@ class CaseControllerTest {
                 "default",
                 8192,
                 json.readTree("{\"expected_tools\":[\"market.get_realtime_quote\"]}"),
-                true);
+                true,
+                json.readTree("[]"));
     }
 
     @Test

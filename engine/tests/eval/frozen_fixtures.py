@@ -1,0 +1,139 @@
+"""测试共享：A/B 评测冻结工具返回（与 db seed 08 同步）。
+
+镜像 ``GET /internal/v1/tool-fixtures/ab-eval`` 的 payload 形状，供单测构建
+``FrozenObservations``；与 seed SQL 的漂移由 ``test_frozen_fixture_sync`` 守卫。
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+# (call_key, tool_name, response)：行内容必须与 db/postgresql/setup/08-seed-tool-fixtures.sql 一致
+FROZEN_RESPONSES: list[tuple[str, str, dict[str, Any]]] = [
+    (
+        "market.resolve_instrument",
+        "market.resolve_instrument",
+        {"symbol": "300750", "name": "宁德时代", "exchange": "SZSE", "industry": "电池"},
+    ),
+    (
+        "market.get_realtime_quote",
+        "market.get_realtime_quote",
+        {"symbol": "300750", "name": "宁德时代", "price": 185.50, "change": -2.30, "pct_change": -1.22,
+         "volume": 1234567, "timestamp": "2026-08-19 14:32:00"},
+    ),
+    (
+        "market.get_valuation",
+        "market.get_valuation",
+        {"symbol": "300750", "pe_ttm": 28.5, "pb": 5.2, "pe_percentile": 0.65, "pb_percentile": 0.45},
+    ),
+    (
+        "market.get_financial_statements",
+        "market.get_financial_statements",
+        {"symbol": "300750", "revenue_yoy": 0.153, "net_margin": 0.121, "roe": 0.187, "gross_margin": 0.221},
+    ),
+    (
+        "market.get_historical_prices",
+        "market.get_historical_prices",
+        {"symbol": "300750", "prices": [
+            {"date": "2026-08-18", "open": 187.0, "high": 188.5, "low": 184.2, "close": 185.5, "volume": 1234567},
+            {"date": "2026-08-15", "open": 182.0, "high": 186.0, "low": 181.5, "close": 185.0, "volume": 987654},
+        ]},
+    ),
+    (
+        "market.get_industry_context",
+        "market.get_industry_context",
+        {"industry": "电池", "rank": 1, "market_share": 0.32, "industry_pe_median": 22.3},
+    ),
+    (
+        "market.get_news",
+        "market.get_news",
+        {"items": [
+            {"title": "宁德时代发布半年报", "source": "深交所", "time": "2026-08-18"},
+            {"title": "固态电池技术突破", "source": "科技日报", "time": "2026-08-15"},
+        ]},
+    ),
+    (
+        "market.get_money_flow",
+        "market.get_money_flow",
+        {"net_inflow": -1234567.89, "main_force": "net_outflow", "super_large": -2345678.90},
+    ),
+    (
+        "research.web_search",
+        "research.web_search",
+        {"results": [
+            {"title": "固态电池最新进展", "url": "https://example.com/1", "snippet": "宁德时代固态电池取得突破性进展"},
+            {"title": "新能源行业分析", "url": "https://example.com/2", "snippet": "2026年新能源电池行业持续增长"},
+        ]},
+    ),
+    (
+        "portfolio.get_current_positions",
+        "portfolio.get_current_positions",
+        {"positions": [
+            {"symbol": "300750", "name": "宁德时代", "quantity": 200, "cost": 150.0, "weight": 0.18},
+            {"symbol": "600519", "name": "贵州茅台", "quantity": 50, "cost": 1680.0, "weight": 0.22},
+        ]},
+    ),
+    (
+        "portfolio.get_account_snapshot",
+        "portfolio.get_account_snapshot",
+        {"cash": 50000, "total_assets": 87100, "market_value": 37100, "total_cost": 30000},
+    ),
+    (
+        "portfolio.get_transaction_history",
+        "portfolio.get_transaction_history",
+        {"transactions": [
+            {"date": "2026-07-15", "symbol": "300750", "action": "buy", "quantity": 100, "price": 150.0},
+            {"date": "2026-06-20", "symbol": "600519", "action": "buy", "quantity": 50, "price": 1680.0},
+        ]},
+    ),
+    (
+        "portfolio.build_current_valuation",
+        "portfolio.build_current_valuation",
+        {"market_value": 37100, "total_cost": 30000, "pnl": 7100, "pnl_pct": 0.237},
+    ),
+    (
+        "user.get_risk_profile",
+        "user.get_risk_profile",
+        {"risk_tolerance": "moderate", "risk_level": "R3", "description": "稳健型"},
+    ),
+    (
+        "analysis.run_analysis",
+        "analysis.run_analysis",
+        {"score": 72, "rating": "中性偏强", "dimensions": {"technical": 78, "fundamental": 74, "valuation": 52,
+                                                             "money_flow": 65, "sentiment": 71},
+         "findings": ["技术面短期超买", "基本面营收增长稳健", "估值高于行业中位数"]},
+    ),
+    (
+        "market.get_realtime_quote:600519",
+        "market.get_realtime_quote",
+        {"symbol": "600519", "name": "贵州茅台", "price": 1685.00, "change": 12.50, "pct_change": 0.75,
+         "volume": 234567, "timestamp": "2026-08-19 14:32:00"},
+    ),
+    (
+        "market.get_valuation:600519",
+        "market.get_valuation",
+        {"symbol": "600519", "pe_ttm": 32.1, "pb": 11.2, "pe_percentile": 0.72, "pb_percentile": 0.85},
+    ),
+    (
+        "market.resolve_instrument:600519",
+        "market.resolve_instrument",
+        {"symbol": "600519", "name": "贵州茅台", "exchange": "SHSE", "industry": "白酒"},
+    ),
+]
+
+
+def frozen_payload() -> dict[str, Any]:
+    """构建与 data 服务 ``/internal/v1/tool-fixtures/ab-eval`` 同构的 payload。"""
+    return {
+        "fixtureSetId": "ab-eval",
+        "fixtureSetVersion": 1,
+        "responses": [
+            {
+                "call_key": call_key,
+                "tool_name": tool_name,
+                "response_status": "SUCCESS",
+                "response": response,
+            }
+            for call_key, tool_name, response in FROZEN_RESPONSES
+        ],
+    }

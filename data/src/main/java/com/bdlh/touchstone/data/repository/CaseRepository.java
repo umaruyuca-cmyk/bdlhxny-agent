@@ -16,7 +16,16 @@ public class CaseRepository {
     private static final String SELECT_COLUMNS = """
             SELECT d.id, v.version, d.title, v.message, v.scene, v.authenticated,
                    v.allowed_tools, v.context_profile, v.token_budget,
-                   v.expected_checks, v.public
+                   v.expected_checks, v.public,
+                   COALESCE((
+                       SELECT jsonb_agg(jsonb_build_object(
+                                  'stepNumber', s.step_number,
+                                  'message', s.message,
+                                  'assistant', (s.expected_checks ->> 'role') = 'assistant_fixture'
+                              ) ORDER BY s.step_number)
+                       FROM touchstone.case_steps s
+                       WHERE s.case_id = d.id AND s.case_version = v.version
+                   ), '[]'::jsonb) AS steps
             FROM touchstone.case_definitions d
             JOIN touchstone.case_versions v
               ON v.case_id = d.id
@@ -66,7 +75,8 @@ public class CaseRepository {
                 rs.getString("context_profile"),
                 rs.getInt("token_budget"),
                 readJson(rs.getString("expected_checks")),
-                rs.getBoolean("public"));
+                rs.getBoolean("public"),
+                readJson(rs.getString("steps")));
     }
 
     private JsonNode readJson(String value) throws SQLException {

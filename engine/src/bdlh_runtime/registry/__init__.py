@@ -8,7 +8,7 @@ from .defaults import (
     DEFAULT_ENTITLEMENT_OPERATIONS,
     DEFAULT_RUNTIME_ALLOWED_OPERATIONS,
 )
-from .loader import load_and_validate
+from .loader import load_and_validate, load_and_validate_payload
 from .menu import (
     FEATURE_GATED_CAPABILITIES,
     allowed_capabilities,
@@ -50,4 +50,5 @@ __all__ = [
     "eligible_capabilities",
     "enabled_skills",
     "load_and_validate",
+    "load_and_validate_payload",
 ]

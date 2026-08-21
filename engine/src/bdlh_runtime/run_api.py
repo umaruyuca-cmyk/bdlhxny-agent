@@ -19,7 +19,7 @@ from fastapi import Depends, FastAPI, Header, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
 from bdlh_runtime.data_client import DataClient, DataServiceError
-from bdlh_runtime.evaluation.ab_eval import _report_payload, run_ab_eval
+from bdlh_runtime.evaluation.ab_eval import _report_payload, load_cases, run_ab_eval
 
 ARTIFACTS_DIR = Path(os.getenv("ARTIFACTS_DIR", "/app/artifacts"))
 
@@ -163,7 +163,7 @@ def start_eval_batch(
 
     def task() -> None:
         try:
-            report = _execute_eval(request)
+            report = _execute_eval(request, catalog)
             _persist_runs(data, batch_id, catalog, request, report)
             _persist_artifact(batch_id, report)
             data.complete_batch(batch_id, "COMPLETE")
@@ -197,13 +197,13 @@ def get_batch(batch_id: str, account: Annotated[dict[str, Any], Depends(require_
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-def _execute_eval(request: EvalBatchRequest) -> dict[str, Any]:
+def _execute_eval(request: EvalBatchRequest, catalog: list[dict[str, Any]]) -> dict[str, Any]:
     async def run() -> Any:
         return await run_ab_eval(
             runs_per_case=request.runs,
             model=request.model,
             with_react=request.include_react,
-            case_ids=request.case_ids,
+            cases=load_cases(catalog),
         )
 
     return _report_payload(asyncio.run(run()))

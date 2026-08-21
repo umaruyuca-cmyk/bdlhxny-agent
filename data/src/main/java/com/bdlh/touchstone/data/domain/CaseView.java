@@ -13,4 +13,5 @@ public record CaseView(
         String contextProfile,
         int tokenBudget,
         JsonNode expectedChecks,
-        boolean publicCase) {}
+        boolean publicCase,
+        JsonNode steps) {}

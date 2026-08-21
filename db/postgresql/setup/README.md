@@ -1,6 +1,6 @@
 # 新数据库初始化
 
-本目录中的六份 SQL 由维护者手动执行，应用启动不会自动运行。
+本目录中的七份 SQL 由维护者手动执行，应用启动不会自动运行。
 
 ## 执行顺序
 
@@ -12,6 +12,7 @@
 | 4 | `04-seed-agent-and-context-catalog.sql` | 写入三种 Agent 和四种上下文策略 |
 | 5 | `05-create-execution-detail-tables.sql` | 创建守卫拦截明细和模型输入消息快照表 |
 | 6 | `06-create-accounts-tables.sql` | 创建所有者账号、登录会话和审计表 |
+| 7 | `07-create-tool-catalog-tables.sql` | 创建工具目录表并写入操作证、工具集、能力和技能 |
 
 必须按顺序执行。每份脚本都使用事务，并在成功后写入
 `touchstone.database_changes`。执行失败时整份脚本回滚。
@@ -51,7 +52,11 @@ Get-Content -Raw db/postgresql/setup/06-create-accounts-tables.sql |
   docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec -T postgres `
     sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 
-六份脚本完成后再启动其他私有服务：
+Get-Content -Raw db/postgresql/setup/07-create-tool-catalog-tables.sql |
+  docker compose --env-file deploy/.env -f deploy/docker-compose.yml exec -T postgres `
+    sh -c 'psql -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
+
+七份脚本完成后再启动其他私有服务：
 
 ```powershell
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d data engine web
@@ -70,6 +75,7 @@ psql $env:TOUCHSTONE_PG_URL -v ON_ERROR_STOP=1 -f db/postgresql/setup/03-create-
 psql $env:TOUCHSTONE_PG_URL -v ON_ERROR_STOP=1 -f db/postgresql/setup/04-seed-agent-and-context-catalog.sql
 psql $env:TOUCHSTONE_PG_URL -v ON_ERROR_STOP=1 -f db/postgresql/setup/05-create-execution-detail-tables.sql
 psql $env:TOUCHSTONE_PG_URL -v ON_ERROR_STOP=1 -f db/postgresql/setup/06-create-accounts-tables.sql
+psql $env:TOUCHSTONE_PG_URL -v ON_ERROR_STOP=1 -f db/postgresql/setup/07-create-tool-catalog-tables.sql
 ```
 
 不要把真实连接串写入仓库文件或命令记录文档。
@@ -82,7 +88,7 @@ FROM touchstone.database_changes
 ORDER BY applied_at;
 ```
 
-正常结果应该有六行。如果少于六行，先处理失败脚本，不能跳过顺序直接启动 Data 服务。
+正常结果应该有七行。如果少于七行，先处理失败脚本，不能跳过顺序直接启动 Data 服务。
 
 ## 创建初始所有者账号
 

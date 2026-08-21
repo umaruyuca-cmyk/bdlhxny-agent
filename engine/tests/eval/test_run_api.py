@@ -17,7 +17,21 @@ class FakeDataClient:
         self.completed: list[str] = []
 
     def list_cases(self) -> list[dict[str, Any]]:
-        return [{"id": "research-01", "version": 1, "message": "宁德时代现在什么价"}]
+        return [
+            {
+                "id": "research-01",
+                "version": 1,
+                "title": "实时行情工具选择",
+                "message": "宁德时代现在什么价",
+                "scene": "market",
+                "authenticated": False,
+                "expectedChecks": {
+                    "category": "金融研究",
+                    "expected_tools": ["market.get_realtime_quote"],
+                },
+                "steps": [],
+            }
+        ]
 
     def create_batch(self, **_: Any) -> str:
         return "batch-1"
@@ -97,7 +111,7 @@ def test_batch_persists_each_agent_mode(
     monkeypatch.setattr(
         run_api,
         "_execute_eval",
-        lambda _: {
+        lambda _request, _catalog: {
             "cases": [
                 {
                     "id": "research-01",

@@ -12,9 +12,15 @@ from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, ChatResult
 from pydantic import PrivateAttr
 
-from bdlh_runtime.evaluation.ab_eval import MockToolExecutor
+from bdlh_runtime.evaluation.ab_eval import FrozenToolExecutor
 from bdlh_runtime.evaluation.baseline_langgraph import card_to_tool, react_official_run
+from bdlh_runtime.evaluation.frozen_observations import FrozenObservations
 from bdlh_runtime.tools.catalog import ToolCard
+from tests.eval.frozen_fixtures import frozen_payload
+
+
+def _executor() -> FrozenToolExecutor:
+    return FrozenToolExecutor(FrozenObservations(frozen_payload()))
 
 
 class ScriptedModel(BaseChatModel):
@@ -56,7 +62,7 @@ def _tool_call_msg() -> AIMessage:
 
 @pytest.mark.asyncio
 async def test_card_to_tool_executes_via_shared_executor():
-    executor = MockToolExecutor()
+    executor = _executor()
     tool = card_to_tool(_quote_card(), executor)
 
     assert tool.name == "market.get_realtime_quote"
@@ -71,7 +77,7 @@ async def test_card_to_tool_executes_via_shared_executor():
 async def test_react_run_full_cycle():
     model = ScriptedModel()
     model._queue = [_tool_call_msg(), AIMessage(content="现价 185.50")]
-    executor = MockToolExecutor()
+    executor = _executor()
 
     result = await react_official_run(
         message="宁德时代现在什么价",
@@ -93,7 +99,7 @@ async def test_react_run_full_cycle():
 async def test_react_run_recursion_exhaustion():
     model = ScriptedModel()
     model._queue = [_tool_call_msg() for _ in range(50)]
-    executor = MockToolExecutor()
+    executor = _executor()
 
     result = await react_official_run(
         message="任何问题",
@@ -114,7 +120,7 @@ async def test_react_run_recursion_exhaustion():
 async def test_react_run_rounds_exclude_history():
     model = ScriptedModel()
     model._queue = [AIMessage(content="直接回答")]
-    executor = MockToolExecutor()
+    executor = _executor()
 
     result = await react_official_run(
         message="它现在什么价",

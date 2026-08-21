@@ -1,146 +1,42 @@
-"""A/B eval canned tool results（MockExecutor 按工具名返回这些桩数据）。
+"""A/B 评测冻结工具返回（唯一真源：data 服务 → PostgreSQL fixture 表）。
 
-两组共用同一份 canned 数据，隔离工具执行质量差异——唯一变量是
-有没有 Agent 工程模式（Guardrail Middleware / Selective Loading /
-Fast-Path / Output Guardrail）。
+数据集 ``ab-eval`` 由 seed（08）写入 ``fixture_tool_responses``；engine 启动
+评测时一次拉取、运行期内存查找。三组对照共用同一份冻结数据，隔离工具执行
+质量差异——唯一变量是编排形态。
+
+call_key 规则：基准返回为工具名；标的覆盖为「工具名:标的代码」（如
+``market.get_valuation:600519``）。查找先精确（带 symbol 覆盖键）再回退基准。
 """
 
 from __future__ import annotations
 
 from typing import Any
 
-CANNED: dict[str, dict[str, Any]] = {
-    "market.resolve_instrument": {
-        "symbol": "300750",
-        "name": "宁德时代",
-        "exchange": "SZSE",
-        "industry": "电池",
-    },
-    "market.get_realtime_quote": {
-        "symbol": "300750",
-        "name": "宁德时代",
-        "price": 185.50,
-        "change": -2.30,
-        "pct_change": -1.22,
-        "volume": 1234567,
-        "timestamp": "2026-08-19 14:32:00",
-    },
-    "market.get_valuation": {
-        "symbol": "300750",
-        "pe_ttm": 28.5,
-        "pb": 5.2,
-        "pe_percentile": 0.65,
-        "pb_percentile": 0.45,
-    },
-    "market.get_financial_statements": {
-        "symbol": "300750",
-        "revenue_yoy": 0.153,
-        "net_margin": 0.121,
-        "roe": 0.187,
-        "gross_margin": 0.221,
-    },
-    "market.get_historical_prices": {
-        "symbol": "300750",
-        "prices": [
-            {"date": "2026-08-18", "open": 187.0, "high": 188.5, "low": 184.2, "close": 185.5, "volume": 1234567},
-            {"date": "2026-08-15", "open": 182.0, "high": 186.0, "low": 181.5, "close": 185.0, "volume": 987654},
-        ],
-    },
-    "market.get_industry_context": {
-        "industry": "电池",
-        "rank": 1,
-        "market_share": 0.32,
-        "industry_pe_median": 22.3,
-    },
-    "market.get_news": {
-        "items": [
-            {"title": "宁德时代发布半年报", "source": "深交所", "time": "2026-08-18"},
-            {"title": "固态电池技术突破", "source": "科技日报", "time": "2026-08-15"},
-        ],
-    },
-    "market.get_money_flow": {
-        "net_inflow": -1234567.89,
-        "main_force": "net_outflow",
-        "super_large": -2345678.90,
-    },
-    "research.web_search": {
-        "results": [
-            {"title": "固态电池最新进展", "url": "https://example.com/1", "snippet": "宁德时代固态电池取得突破性进展"},
-            {"title": "新能源行业分析", "url": "https://example.com/2", "snippet": "2026年新能源电池行业持续增长"},
-        ],
-    },
-    "portfolio.get_current_positions": {
-        "positions": [
-            {"symbol": "300750", "name": "宁德时代", "quantity": 200, "cost": 150.0, "weight": 0.18},
-            {"symbol": "600519", "name": "贵州茅台", "quantity": 50, "cost": 1680.0, "weight": 0.22},
-        ],
-    },
-    "portfolio.get_account_snapshot": {
-        "cash": 50000,
-        "total_assets": 87100,
-        "market_value": 37100,
-        "total_cost": 30000,
-    },
-    "portfolio.get_transaction_history": {
-        "transactions": [
-            {"date": "2026-07-15", "symbol": "300750", "action": "buy", "quantity": 100, "price": 150.0},
-            {"date": "2026-06-20", "symbol": "600519", "action": "buy", "quantity": 50, "price": 1680.0},
-        ],
-    },
-    "portfolio.build_current_valuation": {
-        "market_value": 37100,
-        "total_cost": 30000,
-        "pnl": 7100,
-        "pnl_pct": 0.237,
-    },
-    "user.get_risk_profile": {
-        "risk_tolerance": "moderate",
-        "risk_level": "R3",
-        "description": "稳健型",
-    },
-    "analysis.run_analysis": {
-        "score": 72,
-        "rating": "中性偏强",
-        "dimensions": {
-            "technical": 78,
-            "fundamental": 74,
-            "valuation": 52,
-            "money_flow": 65,
-            "sentiment": 71,
-        },
-        "findings": ["技术面短期超买", "基本面营收增长稳健", "估值高于行业中位数"],
-    },
-}
-
-_CANNED_600519: dict[str, dict[str, Any]] = {
-    "market.get_realtime_quote": {
-        "symbol": "600519",
-        "name": "贵州茅台",
-        "price": 1685.00,
-        "change": 12.50,
-        "pct_change": 0.75,
-        "volume": 234567,
-        "timestamp": "2026-08-19 14:32:00",
-    },
-    "market.get_valuation": {
-        "symbol": "600519",
-        "pe_ttm": 32.1,
-        "pb": 11.2,
-        "pe_percentile": 0.72,
-        "pb_percentile": 0.85,
-    },
-    "market.resolve_instrument": {
-        "symbol": "600519",
-        "name": "贵州茅台",
-        "exchange": "SHSE",
-        "industry": "白酒",
-    },
-}
+#: 评测使用的冻结数据集编号（对应 db seed 08 的 fixture_sets.id）。
+FIXTURE_SET_ID = "ab-eval"
 
 
-def get_canned(tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
-    """Return canned result; 600519 覆盖部分行情/估值数据。"""
-    symbol = (arguments or {}).get("symbol", "")
-    if symbol == "600519" and tool_name in _CANNED_600519:
-        return _CANNED_600519[tool_name]
-    return CANNED.get(tool_name, {"status": "FAILED", "error": f"unknown tool: {tool_name}"})
+class FrozenObservations:
+    """从 data 服务 payload 构建的冻结返回查找表（无代码内兜底数据）。"""
+
+    def __init__(self, payload: dict[str, Any]) -> None:
+        responses = payload.get("responses") or []
+        if not isinstance(responses, list) or not responses:
+            raise ValueError("tool fixture payload has no responses")
+        self._by_key: dict[str, dict[str, Any]] = {}
+        for item in responses:
+            call_key = str(item["call_key"])
+            if item.get("response_status") != "SUCCESS":
+                continue
+            self._by_key[call_key] = dict(item["response"])
+        if not self._by_key:
+            raise ValueError("tool fixture payload has no SUCCESS responses")
+
+    def get(self, tool_name: str, arguments: dict[str, Any] | None = None) -> dict[str, Any]:
+        """按 (tool_name, symbol) 查找冻结返回；覆盖键优先，未命中回失败桩。"""
+        symbol = str((arguments or {}).get("symbol") or "")
+        if symbol and f"{tool_name}:{symbol}" in self._by_key:
+            return self._by_key[f"{tool_name}:{symbol}"]
+        if tool_name in self._by_key:
+            return self._by_key[tool_name]
+        return {"status": "FAILED", "error": f"unknown tool: {tool_name}"}
