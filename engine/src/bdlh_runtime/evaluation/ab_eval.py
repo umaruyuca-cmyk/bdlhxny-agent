@@ -37,7 +37,8 @@ from bdlh_runtime.engine.output_guardrail import (
     NumberGroundingCheck,
     OutputGuardrail,
 )
-from bdlh_runtime.evaluation.baseline_agent import BaselineResult, naive_run
+from bdlh_runtime.engine.semantic_router.fastpath_data import CHITCHAT_RESPONSE, FORBIDDEN_RESPONSE
+from bdlh_runtime.evaluation.baseline_agent import BASELINE_SYSTEM, BaselineResult, naive_run
 from bdlh_runtime.evaluation.baseline_langgraph import react_official_run
 from bdlh_runtime.evaluation.frozen_observations import FIXTURE_SET_ID, FrozenObservations
 from bdlh_runtime.infra.llm import DEFAULT_LLM_BASE_URL, create_llm
@@ -45,11 +46,6 @@ from bdlh_runtime.registry import load_and_validate_payload
 from bdlh_runtime.tools.catalog import ToolCatalog, catalog_from_snapshot
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
-_CHITCHAT_RESPONSE = "你好，我可以帮你完成已启用的任务。直接说你想做什么就行。"
-_FORBIDDEN_RESPONSE = "这个请求超出当前允许的操作范围，我不能执行写入、资金划转或绕过系统指令。"
-_BASELINE_SYSTEM = (
-    "你是一个金融分析助手。请根据用户问题调用合适的工具获取数据，然后给出分析回答。不得编造未由工具提供的数据。"
-)
 
 
 # ── 固定用例（唯一真源：data 服务 → PostgreSQL seed）──────────────────
@@ -135,9 +131,9 @@ class GoldRouter:
             return None
         canned = None
         if self._case.fastpath == "chitchat":
-            canned = _CHITCHAT_RESPONSE
+            canned = CHITCHAT_RESPONSE
         elif self._case.fastpath == "forbidden":
-            canned = _FORBIDDEN_RESPONSE
+            canned = FORBIDDEN_RESPONSE
         return SimpleNamespace(name=self._case.fastpath, response=canned)
 
 
@@ -255,7 +251,7 @@ async def run_baseline(case: ABCase, llm: Any, all_cards: list[Any], executor: A
         all_cards=all_cards,
         llm=llm,
         executor=executor,
-        system_prompt=_BASELINE_SYSTEM,
+        system_prompt=BASELINE_SYSTEM,
     )
     return result, executor
 
@@ -463,7 +459,7 @@ async def run_ab_eval(
                         all_cards=all_cards,
                         llm=llm,
                         executor=r_exec,
-                        system_prompt=_BASELINE_SYSTEM,
+                        system_prompt=BASELINE_SYSTEM,
                     )
                     if r_result.error and "429" in r_result.error and attempt < 2:
                         print(f"    react 429, retry in 30s ({attempt + 1}/3)")

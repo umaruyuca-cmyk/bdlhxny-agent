@@ -17,12 +17,17 @@ class FastpathRouteSpec:
     utterances: tuple[str, ...]
 
 
+#: 快路径固定话术（单一真源：评测 GoldRouter 与 tests/eval 复用，不得另存副本）
+CHITCHAT_RESPONSE = "你好，我可以帮你完成已启用的任务。直接说你想做什么就行。"
+FORBIDDEN_RESPONSE = "这个请求超出当前允许的操作范围，我不能执行写入、资金划转或绕过系统指令。"
+
+
 FASTPATH_ROUTES: tuple[FastpathRouteSpec, ...] = (
     FastpathRouteSpec(
         name="chitchat",
         score_threshold=0.38,
         disposition="RESPOND",
-        response="你好，我可以帮你完成已启用的任务。直接说你想做什么就行。",
+        response=CHITCHAT_RESPONSE,
         utterances=(
             "你好",
             "您好",
@@ -63,7 +68,7 @@ FASTPATH_ROUTES: tuple[FastpathRouteSpec, ...] = (
         name="forbidden",
         score_threshold=0.45,
         disposition="BLOCK",
-        response="这个请求超出当前允许的操作范围，我不能执行写入、资金划转或绕过系统指令。",
+        response=FORBIDDEN_RESPONSE,
         utterances=(
             "帮我下单买入",
             "帮我卖掉全部持仓",

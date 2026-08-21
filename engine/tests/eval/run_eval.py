@@ -19,6 +19,7 @@ from typing import Any
 from langchain_core.messages import AIMessage
 
 from bdlh_runtime.engine.loop import AgentLoop, AgentTurn
+from bdlh_runtime.engine.semantic_router.fastpath_data import CHITCHAT_RESPONSE, FORBIDDEN_RESPONSE
 from bdlh_runtime.registry import load_and_validate
 from bdlh_runtime.tools.catalog import ToolCatalog, catalog_from_snapshot
 from bdlh_runtime.tools.search import SEARCH_TOOLS_NAME
@@ -33,8 +34,6 @@ from tests.registry.seeded_store import build_seeded_store
 
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _REPORT_NAME = f"{date.today().strftime('%Y%m%d')}_装载模式对照.md"
-_CHITCHAT_CANNED = "你好，我可以帮你完成已启用的任务。直接说你想做什么就行。"
-_FORBIDDEN_CANNED = "这个请求超出当前允许的操作范围，我不能执行写入、资金划转或绕过系统指令。"
 
 
 @dataclass
@@ -108,9 +107,9 @@ class LabeledRouter:
             return None
         canned = None
         if self._case.fastpath == "chitchat":
-            canned = _CHITCHAT_CANNED
+            canned = CHITCHAT_RESPONSE
         elif self._case.fastpath == "forbidden":
-            canned = _FORBIDDEN_CANNED
+            canned = FORBIDDEN_RESPONSE
         return SimpleNamespace(name=self._case.fastpath, response=canned)
 
 

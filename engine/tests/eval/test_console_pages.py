@@ -15,13 +15,15 @@ from bdlh_runtime.tools.catalog import catalog_from_snapshot
 from tests.registry.seeded_store import build_seeded_store
 
 _CONSOLE_DOCS = Path(__file__).resolve().parents[3] / "web" / "public" / "docs"
-_SEED_SQL = Path(__file__).resolve().parents[3] / "db" / "postgresql" / "setup" / "02-seed-fixed-cases.sql"
+_INIT_SQL = Path(__file__).resolve().parents[3] / "db" / "postgresql" / "setup" / "init.sql"
 
 
 def _seed_cases() -> list[tuple[str, str]]:
-    """从数据库 seed（固定题库唯一真源）提取 (case_id, message)。"""
-    text = _SEED_SQL.read_text(encoding="utf-8")
-    return re.findall(r"^\('([a-z]+-\d+)', 1, '([^']+)'", text, re.MULTILINE)
+    """从数据库 init.sql 的固定用例段（唯一真源）提取 (case_id, message)。"""
+    text = _INIT_SQL.read_text(encoding="utf-8")
+    start = text.index("INSERT INTO touchstone.case_versions")
+    section = text[start : text.index(";", start)]
+    return re.findall(r"^\('([a-z]+-\d+)', 1, '([^']+)'", section, re.MULTILINE)
 
 
 def test_cases_page_lists_all_eval_cases():

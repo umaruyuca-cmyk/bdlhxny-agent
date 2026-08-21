@@ -102,7 +102,8 @@ def _extract_tokens(response: Any) -> tuple[int, int]:
     return 0, approx
 
 
-_BASELINE_SYSTEM = (
+#: 基线系统提示词（单一真源：裸调用与 ReAct 对照共用，ab_eval 复用）
+BASELINE_SYSTEM = (
     "你是一个金融分析助手。请根据用户问题调用合适的工具获取数据，然后给出分析回答。不得编造未由工具提供的数据。"
 )
 
@@ -114,7 +115,7 @@ async def naive_run(
     llm: Any,
     executor: Any,
     *,
-    system_prompt: str = _BASELINE_SYSTEM,
+    system_prompt: str = BASELINE_SYSTEM,
     max_rounds: int = 10,
 ) -> BaselineResult:
     """Run a naive LLM tool-calling loop with ALL tools and NO guardrails."""
