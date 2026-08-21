@@ -28,6 +28,7 @@ services:
       GIT_COMMIT: ${GIT_COMMIT:?GIT_COMMIT is required}
       ARTIFACTS_DIR: /app/artifacts
       MAX_CONCURRENT_BATCHES: ${MAX_CONCURRENT_BATCHES:-1}
+      RUN_API_ALLOWED_ORIGINS: ${RUN_API_ALLOWED_ORIGINS:-}
     depends_on:
       data:
         condition: service_healthy

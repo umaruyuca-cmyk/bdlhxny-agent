@@ -16,6 +16,7 @@ from typing import Annotated, Any
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from bdlh_runtime.data_client import DataClient, DataServiceError
@@ -31,6 +32,17 @@ app = FastAPI(
     redoc_url=None,
     openapi_url=None,
 )
+
+# 私有 CORS：仅 /lab 页面跨端口调用需要。RUN_API_ALLOWED_ORIGINS 为空（默认）时
+# 不挂中间件、不带任何 CORS 头（fail-closed）；公开部署永不配置该变量。
+_allowed_origins = [origin.strip() for origin in os.getenv("RUN_API_ALLOWED_ORIGINS", "").split(",") if origin.strip()]
+if _allowed_origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_allowed_origins,
+        allow_methods=["GET", "POST"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
 _JOBS: dict[str, dict[str, Any]] = {}
 _BATCH_SLOTS = threading.BoundedSemaphore(max(1, int(os.getenv("MAX_CONCURRENT_BATCHES", "1"))))
 

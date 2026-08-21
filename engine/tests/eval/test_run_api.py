@@ -85,6 +85,44 @@ def test_interactive_docs_are_disabled(client: TestClient) -> None:
     assert client.get("/openapi.json").status_code == 404
 
 
+def test_cors_disabled_by_default(client: TestClient) -> None:
+    """RUN_API_ALLOWED_ORIGINS 未配置时 fail-closed：响应不带任何 CORS 头。"""
+    response = client.options(
+        "/api/v1/cases",
+        headers={"Origin": "http://127.0.0.1:8082", "Access-Control-Request-Method": "GET"},
+    )
+    assert "access-control-allow-origin" not in response.headers
+
+
+def test_cors_enabled_only_with_configured_origins(monkeypatch: pytest.MonkeyPatch) -> None:
+    """配置 /lab 来源后预检放行，且只放行配置值。"""
+    import importlib
+
+    monkeypatch.setenv("RUN_API_ALLOWED_ORIGINS", "http://127.0.0.1:8082")
+    reloaded = importlib.reload(run_api)
+    try:
+        with TestClient(reloaded.app) as cors_client:
+            preflight = cors_client.options(
+                "/api/v1/cases",
+                headers={
+                    "Origin": "http://127.0.0.1:8082",
+                    "Access-Control-Request-Method": "GET",
+                    "Access-Control-Request-Headers": "authorization",
+                },
+            )
+            assert preflight.status_code in (200, 204)
+            assert preflight.headers["access-control-allow-origin"] == "http://127.0.0.1:8082"
+
+            disallowed = cors_client.options(
+                "/api/v1/cases",
+                headers={"Origin": "http://evil.example", "Access-Control-Request-Method": "GET"},
+            )
+            assert disallowed.headers.get("access-control-allow-origin") != "http://evil.example"
+    finally:
+        monkeypatch.delenv("RUN_API_ALLOWED_ORIGINS", raising=False)
+        importlib.reload(run_api)
+
+
 def test_requires_session_token(client: TestClient) -> None:
     assert client.get("/api/v1/cases").status_code == 401
 
