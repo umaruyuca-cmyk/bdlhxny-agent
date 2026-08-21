@@ -43,7 +43,7 @@ async function serveStatic(requestPath, request, response) {
   }
   let target = requestPath;
   if (requestPath === "/") target = "/showcase/index.html";
-  else if (requestPath === "/showcase/" || requestPath === "/docs/") target = requestPath + "index.html";
+  else if (requestPath === "/showcase/" || requestPath === "/docs/" || requestPath === "/lab/") target = requestPath + "index.html";
   else if (requestPath.startsWith("/showcase/") || requestPath.startsWith("/docs/")) {
     const prefix = requestPath.startsWith("/showcase/") ? "/showcase/" : "/docs/";
     const pagePath = requestPath.slice(prefix.length);
