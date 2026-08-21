@@ -628,3 +628,22 @@ tr:nth-child(even) td { background: #fcfcfd; }
 .filter-label { font-size: 13px; font-weight: 400; color: #5b6575; margin-left: 10px; }
 .filter-label select { margin-left: 6px; padding: 2px 6px; font-size: 13px; }
 .est-flag { font-size: 11px; color: #a4752a; cursor: help; }
+
+/* ── 实证层运行页：状态徽章 / 九段区块 / 时间线 ─────────────── */
+.run-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+.run-badge { padding: 3px 12px; border-radius: 999px; font-size: 13px; }
+.run-badge.status-COMPLETE, .run-badge.validity-VALID { background: #e3f2e8; }
+.run-badge.status-FAILED, .validity-INVALID { background: #fdeaea; }
+.run-badge.validity-UNCLASSIFIED, .run-badge.status-NOT_RUN { background: #eef1f6; color: #5b6575; }
+.run-meta { font-size: 12.5px; color: #77808f; }
+.run-section { border-top: 1px solid #e6eaf1; padding: 14px 0 6px; margin: 0; }
+.run-section h3 { font-size: 15px; margin: 0 0 10px; }
+.run-kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.run-kv dt { color: #77808f; font-size: 13px; }
+.run-kv dd { margin: 0; font-size: 13.5px; }
+.run-steps { margin: 0; padding-left: 20px; font-size: 13.5px; }
+.run-steps li { margin: 3px 0; }
+.pending { color: #98a1af; font-size: 13.5px; }
+.muted { color: #98a1af; font-size: 12.5px; }
+.ok { color: #2c7a4b; }
+.deny { color: #b23b3b; }

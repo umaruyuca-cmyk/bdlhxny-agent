@@ -116,3 +116,48 @@ test("分场景明细支持场景筛选", () => {
   assert.doesNotMatch(filtered, /research-01/);
   assert.match(all, /≈1/); // 估算口径运行数标记
 });
+
+/* ── 运行页渲染 ─────────────────────────────────────────── */
+
+const RUN = {
+  run_id: "b1-full-research-01-1", batch_id: "b1", case_id: "research-01",
+  status: "COMPLETE", validity: "UNCLASSIFIED",
+  experiment: { agent_mode: "full-system", context_strategy: null, model: "glm-4.7-flash", repeat_index: 1 },
+  sections: {
+    fixed_input: { message: "宁德时代现在什么价", scene: "research", authenticated: false, history_count: 0, allowed_tools: null },
+    context: null,
+    visible_tools: null,
+    model_steps: [{ seq: 1, decision: "call_tool", latency_ms: 800 }],
+    code_decisions: [{ seq: 1, allowed: true, audit_code: "RO-OK" }],
+    tool_results: [{ seq: 1, name: "market.get_realtime_quote", status: "SUCCESS", source: "fixture://ab-eval", data_time: "2026-08-19T14:32:00+08:00" }],
+    output_checks: null,
+    final_result: { answer_excerpt: "现价 185.50 元", citations: null, audit_codes: [], judgment: null },
+    cost: { duration_ms: 3000, prompt_tokens: 1000, completion_tokens: 50, tokens_estimated: false },
+  },
+};
+
+test("九段固定顺序渲染，id 顺序与设计一致", () => {
+  const html = S.renderRunDetail(RUN);
+  const positions = S.RUN_SECTION_TITLES.map(([key]) => html.indexOf(`id="sec-${key}"`));
+  assert.ok(positions.every((p) => p > 0), "九段全部存在");
+  assert.deepEqual([...positions].sort((a, b) => a - b), positions, "渲染顺序必须与九段定义一致");
+});
+
+test("null 段渲染未运行，状态与有效性徽章正确", () => {
+  const html = S.renderRunDetail(RUN);
+  assert.match(html, /有效性未分类/);
+  assert.match(html, /未运行/); // context/output_checks/visible_tools 为 null
+  assert.match(html, /fixture:\/\/ab-eval/);
+  assert.match(html, /全部来自 API usage/); // tokens_estimated=false
+  assert.match(html, /185\.50/);
+});
+
+test("运行缺失与下钻索引：未发布明示，有 run_ids 时给链接", () => {
+  assert.match(S.renderRunDetail(null), /尚未发布/);
+  const noIds = S.renderRunsIndex(REPORT);
+  assert.match(noIds, /未发布/); // v1 发布无 run_ids
+  const withIds = structuredClone(REPORT);
+  withIds.cases[0].run_ids = { "full-system": ["b1-full-research-01-1"] };
+  const html = S.renderRunsIndex(withIds);
+  assert.match(html, /\/showcase\/runs\?id=b1-full-research-01-1/);
+});

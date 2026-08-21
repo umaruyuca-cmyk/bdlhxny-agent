@@ -150,6 +150,138 @@
     return Object.keys(seen).sort();
   }
 
+  var RUN_SECTION_TITLES = [
+    ["fixed_input", "固定输入和受控变量"],
+    ["context", "原始上下文与压缩结果"],
+    ["visible_tools", "当次可见工具"],
+    ["model_steps", "模型决策"],
+    ["code_decisions", "代码允许或拒绝"],
+    ["tool_results", "工具结果及来源"],
+    ["output_checks", "输出检查"],
+    ["final_result", "最终结果和评测"],
+    ["cost", "时长、token 和成本"]
+  ];
+
+  var VALIDITY_LABELS = { VALID: "有效", INVALID: "无效", UNCLASSIFIED: "有效性未分类" };
+  var STATUS_LABELS = {
+    COMPLETE: "完成", FAILED: "失败", INVALID: "无效运行", CANCELLED: "已取消",
+    PENDING_JUDGMENT: "待评测", NOT_RUN: "未运行"
+  };
+
+  function kv(pairs) {
+    return '<dl class="run-kv">' + pairs.map(function (p) {
+      return "<dt>" + p[0] + "</dt><dd>" + p[1] + "</dd>";
+    }).join("") + "</dl>";
+  }
+
+  function listOrPending(items, render) {
+    if (!items || items.length === 0) return '<p class="pending">未运行</p>';
+    return '<ol class="run-steps">' + items.map(render).join("") + "</ol>";
+  }
+
+  /** 九段固定顺序渲染（评测文档 §11.3）；null 段渲染未运行。 */
+  function renderRunDetail(run) {
+    if (!run) return '<div class="placeholder-block">该运行尚未发布。</div>';
+    var s = run.sections || {};
+    var head = '<div class="run-head"><span class="run-badge status-' + esc(run.status) + '">' +
+      esc(STATUS_LABELS[run.status] || run.status) + "</span>" +
+      '<span class="run-badge validity-' + esc(run.validity) + '">' + esc(VALIDITY_LABELS[run.validity] || run.validity) + "</span>" +
+      '<span class="run-meta">' + esc(run.experiment.agent_mode) + " · " + esc(run.experiment.model) +
+      " · 第 " + esc(run.experiment.repeat_index) + " 次 · run " + esc(run.run_id) + "</span></div>";
+
+    var body = RUN_SECTION_TITLES.map(function (pair) {
+      var key = pair[0], title = pair[1], sec = s[key];
+      var inner;
+      if (key === "fixed_input" && sec) {
+        inner = kv([
+          ["问题", esc(sec.message)],
+          ["场景", esc(sec.scene)],
+          ["登录态", sec.authenticated ? "已登录用户" : "游客"],
+          ["历史轮数", num(sec.history_count)],
+          ["允许工具", sec.allowed_tools ? esc(sec.allowed_tools.join("、")) : "未运行"]
+        ]);
+      } else if (key === "context") {
+        inner = !sec ? '<p class="pending">未运行</p>' : kv([
+          ["策略", esc(sec.strategy)],
+          ["原始 token", num(sec.raw_tokens)],
+          ["工作 token", num(sec.working_tokens)],
+          ["强制项保留", sec.required_retained == null ? "未运行" : sec.required_retained ? "是" : "否（本运行应判失败）"],
+          ["条目计数", sec.item_counts ? "保留 " + num(sec.item_counts.retained) + " / 压缩 " + num(sec.item_counts.compressed) +
+            " / 引用 " + num(sec.item_counts.referenced) + " / 隔离 " + num(sec.item_counts.isolated) +
+            " / 省略 " + num(sec.item_counts.omitted) : "未运行"]
+        ]);
+      } else if (key === "visible_tools") {
+        inner = !sec ? '<p class="pending">未运行</p>' : "<p>" + esc(sec.join("、")) + "</p>";
+      } else if (key === "model_steps") {
+        inner = listOrPending(sec, function (step) {
+          return "<li><strong>#" + esc(step.seq) + " " + esc(step.decision) + "</strong>" +
+            (step.latency_ms == null ? "" : ' <span class="muted">' + esc(step.latency_ms) + "ms</span>") + "</li>";
+        });
+      } else if (key === "code_decisions") {
+        inner = listOrPending(sec, function (step) {
+          return "<li>" + (step.allowed ? '<span class="ok">允许</span>' : '<span class="deny">拒绝</span>') +
+            " #" + esc(step.seq) + (step.audit_code ? ' <code>' + esc(step.audit_code) + "</code>" : "") + "</li>";
+        });
+      } else if (key === "tool_results") {
+        inner = listOrPending(sec, function (step) {
+          return "<li><code>" + esc(step.name) + "</code> " + esc(step.status) +
+            (step.source ? ' <span class="muted">来源 ' + esc(step.source) + "</span>" : "") +
+            (step.data_time ? ' <span class="muted">数据时间 ' + esc(step.data_time) + "</span>" : "") + "</li>";
+        });
+      } else if (key === "output_checks") {
+        inner = listOrPending(sec, function (check) {
+          var mark = check.passed == null ? "未运行" : check.passed ? "通过" : "未通过";
+          return "<li><strong>" + esc(check.check) + "</strong> " + mark +
+            (check.detail ? ' <span class="muted">' + esc(check.detail) + "</span>" : "") + "</li>";
+        });
+      } else if (key === "final_result") {
+        inner = sec ? "<p>" + esc(sec.answer_excerpt || "（空）") + "</p>" + kv([
+            ["引用数", num(sec.citations)],
+            ["审计码", (sec.audit_codes || []).length ? esc(sec.audit_codes.join("、")) : "—"],
+            ["判定", !sec.judgment ? "未运行" : [
+              "任务成功：" + (sec.judgment.task_success == null ? "未运行" : sec.judgment.task_success ? "是" : "否"),
+              "工具正确：" + (sec.judgment.tool_correct == null ? "未运行" : sec.judgment.tool_correct ? "是" : "否"),
+              "数字接地：" + (sec.judgment.number_grounded == null ? "未运行" : sec.judgment.number_grounded ? "是" : "否")
+            ].join(" · ")]
+          ]) : '<p class="pending">未运行</p>';
+      } else if (key === "cost") {
+        inner = !sec ? '<p class="pending">未运行</p>' : kv([
+          ["总时长", num(sec.duration_ms, "ms")],
+          ["上下文构建", num(sec.context_ms, "ms")],
+          ["模型", num(sec.llm_ms, "ms")],
+          ["工具", num(sec.tool_ms, "ms")],
+          ["prompt token", num(sec.prompt_tokens)],
+          ["completion token", num(sec.completion_tokens)],
+          ["压缩额外", num(sec.compression_tokens)],
+          ["token 估算口径", sec.tokens_estimated == null ? "未运行" : sec.tokens_estimated ? "含 chars/4 估算" : "全部来自 API usage"]
+        ]);
+      } else {
+        inner = '<p class="pending">未运行</p>';
+      }
+      return '<section class="run-section" id="sec-' + key + '"><h3>' + title + "</h3>" + inner + "</section>";
+    }).join("");
+
+    return head + body;
+  }
+
+  /** 运行下钻索引：每题每组的运行入口（未发布则明示）。 */
+  function renderRunsIndex(report) {
+    if (!report || !report.cases || report.cases.length === 0) {
+      return '<div class="placeholder-block">等待发布数据。</div>';
+    }
+    var groups = report.groups || [];
+    return "<table><thead><tr><th>题号</th>" + groups.map(function (g) { return "<th>" + esc(g.label) + "</th>"; }).join("") +
+      "</tr></thead><tbody>" + report.cases.map(function (c) {
+        return "<tr><td>" + esc(c.id) + "</td>" + groups.map(function (g) {
+          var ids = c.run_ids && c.run_ids[g.key];
+          if (!ids || ids.length === 0) return '<td class="muted">未发布</td>';
+          return "<td>" + ids.map(function (id) {
+            return '<a href="/showcase/runs?id=' + encodeURIComponent(id) + '">' + esc(id.slice(-12)) + "</a>";
+          }).join(" ") + "</td>";
+        }).join("") + "</tr>";
+      }).join("") + "</tbody></table>";
+  }
+
   global.SHOWCASE = {
     esc: esc,
     pct: pct,
@@ -162,6 +294,9 @@
     renderCaseTable: renderCaseTable,
     renderCaseRows: renderCaseRows,
     categories: categories,
-    METRIC_DEFS: METRIC_DEFS
+    renderRunDetail: renderRunDetail,
+    renderRunsIndex: renderRunsIndex,
+    METRIC_DEFS: METRIC_DEFS,
+    RUN_SECTION_TITLES: RUN_SECTION_TITLES
   };
 })(typeof window !== "undefined" ? window : globalThis);

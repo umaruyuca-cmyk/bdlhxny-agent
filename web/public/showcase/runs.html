@@ -54,8 +54,39 @@
     <div id="runDetail" class="placeholder-block">
       <p>等待发布数据：单次运行工件（<code>/showcase-data/runs/{id}.json</code>）发布后，此处按九段顺序渲染，并标注运行状态与有效性。</p>
     </div>
+    <h3>批次运行索引</h3>
+    <div id="runsIndex" class="placeholder-block"><p>等待发布数据。</p></div>
   </main>
 </div>
 <script src="/docs/docs.js"></script>
+<script src="/showcase/shared.js"></script>
+<script>
+(function () {
+  "use strict";
+  var runId = new URLSearchParams(location.search).get("id");
+
+  if (runId) {
+    fetch("/showcase-data/runs/" + encodeURIComponent(runId) + ".json", { cache: "no-store" })
+      .then(function (res) { if (!res.ok) throw new Error("no run"); return res.json(); })
+      .then(function (run) { document.getElementById("runDetail").innerHTML = SHOWCASE.renderRunDetail(run); })
+      .catch(function () {
+        document.getElementById("runDetail").innerHTML = SHOWCASE.renderRunDetail(null);
+      });
+  }
+
+  fetch("/showcase-data/index.json", { cache: "no-store" })
+    .then(function (res) { if (!res.ok) throw new Error("no index"); return res.json(); })
+    .then(function (index) {
+      var latest = index.latest_batch;
+      if (!latest) throw new Error("no batch");
+      return fetch("/showcase-data/batches/" + latest.batch_id + "/report.json", { cache: "no-store" });
+    })
+    .then(function (res) { return res.ok ? res.json() : null; })
+    .then(function (report) {
+      document.getElementById("runsIndex").innerHTML = SHOWCASE.renderRunsIndex(report);
+    })
+    .catch(function () { /* 索引缺位保持占位 */ });
+})();
+</script>
 </body>
 </html>
