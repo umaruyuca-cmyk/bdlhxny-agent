@@ -183,4 +183,18 @@ public final class RunPayloads {
             @NotBlank String storageRef,
             @NotBlank String contentHash,
             boolean publicArtifact) {}
+
+    public record PublicationRunInput(
+            @NotBlank String runId,
+            @NotBlank String publicStorageRef,
+            @NotBlank String publicContentHash) {}
+
+    public record RegisterPublicationRequest(
+            @NotBlank String batchId,
+            @NotBlank String title,
+            @NotBlank String status,
+            @NotBlank String fieldPolicyVersion,
+            @NotBlank String indexStorageRef,
+            @NotBlank String contentHash,
+            @NotEmpty List<@Valid PublicationRunInput> runs) {}
 }

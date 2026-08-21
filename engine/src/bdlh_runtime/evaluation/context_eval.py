@@ -414,6 +414,9 @@ async def run_context_eval(
                 repeat_index=repeat_index,
                 message=case.message,
                 category=case.category,
+                scene=case.scene_tag,
+                authenticated=case.authenticated,
+                history_turns=len(case.history),
             )
             recorder.record.provenance["tool_catalog_hash"] = catalog_hash
             recorder.record.provenance["context_source"] = case.context_source
@@ -527,6 +530,9 @@ async def run_context_eval(
             if status == "COMPLETE":
                 recorder.record_output(answer_excerpt=fixed_answer, audit_codes=[])
             recorder.complete(status=status, error_category=category or None, error_text=judgment.error)
+            recorder.record.visible_tools = (
+                list(agent_result.loaded_tools) if agent_result.loaded_tools else []
+            )
             report.variant_runs.append(
                 VariantRunOutcome(
                     case_id=case.case_id,

@@ -640,6 +640,9 @@ async def run_ab_eval(
             repeat_index=repeat_index,
             message=case.message,
             category=case.category,
+            scene=case.scene_tag,
+            authenticated=case.authenticated,
+            history_turns=len(case.history),
         )
         recorder.record.provenance["tool_catalog_hash"] = catalog_hash
         if emit_context:
@@ -693,6 +696,7 @@ async def run_ab_eval(
             _finalize_run(b_recorder, b_judgment, answer=b_result.answer or "", prompt_hash=baseline_prompt_hash)
             cr.baseline_runs.append(b_judgment)
             cr.baseline_answers.append((b_result.answer or "")[:200])
+            b_recorder.record.visible_tools = sorted(card.name for card in all_cards)
             run_records.append(b_recorder.record)
             return
         if mode == MODE_REACT:
@@ -722,6 +726,7 @@ async def run_ab_eval(
             _finalize_run(r_recorder, r_judgment, answer=r_result.answer or "", prompt_hash=baseline_prompt_hash)
             cr.react_runs.append(r_judgment)
             cr.react_answers.append((r_result.answer or "")[:200])
+            r_recorder.record.visible_tools = sorted(card.name for card in all_cards)
             run_records.append(r_recorder.record)
             return
 
@@ -788,6 +793,9 @@ async def run_ab_eval(
                 }
                 for tool_name, args, result in t_exec.results
             ]
+        t_recorder.record.visible_tools = (
+            list(t_result.loaded_tools) if t_result is not None and t_result.loaded_tools else []
+        )
         run_records.append(t_recorder.record)
 
     # 交错运行(任务三):题序按 repeat 轮转、三组顺序按确定性种子洗牌,

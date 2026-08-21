@@ -268,6 +268,11 @@ class RunRecord:
     repeat_index: int
     message: str
     category: str
+    # 发布投影所需(任务五):场景/登录态/历史轮数/当次可见工具
+    scene: str = ""
+    authenticated: bool = False
+    history_turns: int = 0
+    visible_tools: list[str] = field(default_factory=list)
     events: list[dict[str, Any]] = field(default_factory=list)
     model_calls: list[ModelCallRow] = field(default_factory=list)
     tool_calls: list[ToolCallRow] = field(default_factory=list)
@@ -309,6 +314,9 @@ class RunRecorder:
         repeat_index: int,
         message: str,
         category: str,
+        scene: str = "",
+        authenticated: bool = False,
+        history_turns: int = 0,
     ) -> None:
         self.record = RunRecord(
             run_key=run_key,
@@ -323,6 +331,9 @@ class RunRecorder:
             repeat_index=repeat_index,
             message=message,
             category=category,
+            scene=scene,
+            authenticated=authenticated,
+            history_turns=history_turns,
             started_at=_now_iso(),
             status=RUN_STATUS_COMPLETE,
         )
@@ -1036,6 +1047,8 @@ def build_run_artifact(record: RunRecord) -> dict[str, Any]:
                     "audit_code": row.audit_code,
                     "duration_ms": row.duration_ms,
                     "observation": {"summary": row.result_summary},
+                    "source": "fixture" if row.fixture_hit else None,
+                    "data_time": row.source_time,
                 },
             )
         )
@@ -1055,6 +1068,9 @@ def build_run_artifact(record: RunRecord) -> dict[str, Any]:
             "version": record.case_version,
             "variant": record.variant_id,
             "message": record.message,
+            "scene": record.scene,
+            "authenticated": record.authenticated,
+            "history_count": record.history_turns,
         },
         "experiment": {
             "agent_mode": record.agent_mode,
@@ -1073,6 +1089,17 @@ def build_run_artifact(record: RunRecord) -> dict[str, Any]:
         },
         "context": _artifact_context_section(record),
         "steps": steps,
+        "visible_tools": list(record.visible_tools),
+        "guardrail_checks": [
+            {
+                "sequence": row.sequence,
+                "stage": row.stage,
+                "decision": row.decision,
+                "audit_code": row.audit_code,
+                "tool_name": row.tool_name,
+            }
+            for row in record.guardrail_checks
+        ],
         "result": {
             "answer_excerpt": record.answer_excerpt[:200],
             "audit_codes": sorted({row.audit_code for row in record.tool_calls if row.audit_code}),
@@ -1080,6 +1107,7 @@ def build_run_artifact(record: RunRecord) -> dict[str, Any]:
         },
         "judgment": judgment,
         "timing": {
+            "context_ms": measurements.get("contextCollectMs", 0),
             "llm_ms": measurements.get("llmMs", 0),
             "tool_ms": measurements.get("toolMs", 0),
             "guardrail_ms": measurements.get("guardrailMs", 0),

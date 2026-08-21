@@ -95,6 +95,8 @@ class TestArtifact:
             "provenance",
             "context",
             "steps",
+            "visible_tools",
+            "guardrail_checks",
             "result",
             "judgment",
             "timing",
