@@ -23,6 +23,38 @@ class FakeDataClient:
         self.saved_measurements: list[tuple[str, dict[str, Any]]] = []
         self.saved_artifacts: list[tuple[str, dict[str, Any]]] = []
         self.evaluations: list[tuple[str, dict[str, Any]]] = []
+        self.saved_context_builds: list[tuple[str, dict[str, Any]]] = []
+
+    def get_case_variant_context(self, case_id: str, version: int, variant_id: str) -> dict[str, Any]:
+        return {
+            "caseId": case_id,
+            "caseVersion": version,
+            "variantId": variant_id,
+            "contextStrategy": "budgeted" if variant_id == "budgeted-comp" else "full",
+            "tokenBudget": 12288 if variant_id == "budgeted-comp" else 65536,
+            "source": "data_fixture",
+            "items": [
+                {
+                    "itemKey": "rule-no-trading",
+                    "itemType": "rule",
+                    "classification": "required",
+                    "content": "不得自动下单。",
+                    "priority": 100,
+                    "trusted": True,
+                    "sequence": 0,
+                    "untrusted": False,
+                    "stale": False,
+                    "validFrom": None,
+                    "validTo": None,
+                    "crossUser": False,
+                    "duplicateOf": None,
+                    "observedAt": None,
+                }
+            ],
+        }
+
+    def save_context_build(self, run_id: str, build: dict[str, Any]) -> None:
+        self.saved_context_builds.append((run_id, build))
 
     def list_cases(self) -> list[dict[str, Any]]:
         return [
@@ -47,7 +79,33 @@ class FakeDataClient:
                         "snapshotHash": "sha256:snap",
                     }
                 ],
-            }
+            },
+            {
+                "id": "ctx-mini-port",
+                "version": 1,
+                "title": "迷你组合诊断",
+                "message": "我的持仓现在值多少钱?",
+                "scene": "market",
+                "authenticated": False,
+                "expectedChecks": {"category": "长上下文·组合", "expected_tools": ["market.get_realtime_quote"]},
+                "steps": [],
+                "variants": [
+                    {
+                        "variantId": "full-raw",
+                        "contextStrategy": "full",
+                        "tokenBudget": 65536,
+                        "snapshotId": "ctx-mini-port:full-raw:fixture-v1",
+                        "snapshotHash": "sha256:p1",
+                    },
+                    {
+                        "variantId": "budgeted-comp",
+                        "contextStrategy": "budgeted",
+                        "tokenBudget": 12288,
+                        "snapshotId": "ctx-mini-port:budgeted-comp:fixture-v1",
+                        "snapshotHash": "sha256:p2",
+                    },
+                ],
+            },
         ]
 
     def create_batch(self, **_: Any) -> str:
@@ -333,3 +391,108 @@ def _poll(client: TestClient, job_id: str) -> dict[str, Any]:
             return response.json()
         time.sleep(0.02)
     raise AssertionError("作业未完成")
+
+
+def test_context_batch_persists_variant_runs(
+    client: TestClient,
+    fake_data: FakeDataClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    """任务二验收:压缩对照批次逐变体落库,context_builds 写入真实报告。"""
+    monkeypatch.setattr(run_api, "ARTIFACTS_DIR", tmp_path)
+    recorder = _sample_recorder("full-system")
+    recorder.record.case_id = "ctx-mini-port"
+    recorder.record.variant_id = "budgeted-comp"
+    recorder.record.snapshot_id = "ctx-mini-port:budgeted-comp:fixture-v1"
+    recorder.record.context_strategy = "budgeted"
+    recorder.attach_context_build(
+        {
+            "strategy": "budgeted",
+            "tokenizerVersion": "conservative-cjk1-latin4-v1",
+            "compressionVersion": "structured-text-v1",
+            "tokenBudget": 12288,
+            "originalTokens": 9000,
+            "workingTokens": 3000,
+            "compressionInputTokens": 6000,
+            "compressionOutputTokens": 2000,
+            "durationMs": 12,
+            "requiredRetained": True,
+            "budgetFit": True,
+            "referencesValid": True,
+            "instructionIsolated": True,
+            "status": "COMPLETE",
+            "errorCode": None,
+            "items": [
+                {
+                    "itemKey": "rule-no-trading",
+                    "itemType": "rule",
+                    "classification": "required",
+                    "content": "不得自动下单。",
+                    "sourceId": None,
+                    "ownerId": None,
+                    "observedAt": None,
+                    "priority": 100,
+                    "trusted": True,
+                    "rawTokens": 9,
+                    "contentHash": "sha256:c",
+                    "sequence": 1,
+                }
+            ],
+            "decisions": [
+                {
+                    "itemKey": "rule-no-trading",
+                    "action": "kept",
+                    "reason": "required item",
+                    "inputTokens": 9,
+                    "outputTokens": 9,
+                    "outputContent": None,
+                    "outputHash": None,
+                    "referenceId": None,
+                    "decisionOrder": 0,
+                }
+            ],
+            "messages": [
+                {"messageOrder": 0, "role": "system", "content": "s", "contentHash": "sha256:m", "tokens": 1}
+            ],
+        }
+    )
+    recorder.complete(status="COMPLETE")
+
+    def fake_execute(_request: Any, _views: Any, _selected: Any) -> tuple[dict[str, Any], list[Any]]:
+        return {
+            "case_count": 1,
+            "by_variant": {},
+            "run_records": [{"run_key": recorder.record.run_key, "run_id": None}],
+        }, [recorder.record]
+
+    monkeypatch.setattr(run_api, "_execute_context_eval", fake_execute)
+    response = client.post(
+        "/api/v1/context-batches",
+        json={"case_ids": ["ctx-mini-port"], "runs": 1},
+        headers=_auth(),
+    )
+    assert response.status_code == 200
+    job = _poll(client, response.json()["job_id"])
+    assert job["status"] == "done", job.get("error")
+
+    run_payload = fake_data.created_runs[0]
+    assert run_payload["variantId"] == "budgeted-comp"
+    assert run_payload["snapshotId"] == "ctx-mini-port:budgeted-comp:fixture-v1"
+    assert run_payload["contextStrategy"] == "budgeted"
+    assert len(fake_data.saved_context_builds) == 1
+    build = fake_data.saved_context_builds[0][1]
+    assert build["strategy"] == "budgeted"
+    assert build["items"] and build["decisions"] and build["messages"]
+    assert fake_data.saved_measurements[0][1]["contextCollectMs"] == 12
+    assert job["report"]["run_records"][0]["run_id"] == "run-1"
+    assert (tmp_path / "runs" / "run-1.json").is_file()
+
+
+def test_context_batch_rejects_non_comparison_cases(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/context-batches",
+        json={"case_ids": ["research-01"]},
+        headers=_auth(),
+    )
+    assert response.status_code == 400

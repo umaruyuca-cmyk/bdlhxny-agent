@@ -42,6 +42,13 @@ class DataClient:
             raise DataServiceError("data service returned an invalid tool fixture set")
         return payload
 
+    def get_case_variant_context(self, case_id: str, version: int, variant_id: str) -> dict[str, Any]:
+        """变体上下文条目(压缩对照输入):优先 fixture_context_items,兼容 data_fixture。"""
+        payload = self._request("GET", f"/cases/{case_id}/versions/{version}/variants/{variant_id}/context")
+        if not isinstance(payload, dict):
+            raise DataServiceError("data service returned an invalid variant context")
+        return payload
+
     def create_batch(self, *, name: str, fixed_conditions: dict[str, Any]) -> str:
         payload = self._request(
             "POST",
@@ -97,6 +104,15 @@ class DataClient:
             "POST",
             f"/runs/{run_id}/events",
             json={"events": events},
+            expect_json=False,
+        )
+
+    def save_context_build(self, run_id: str, build: dict[str, Any]) -> None:
+        """上下文构建报告(context_builds/context_items/decisions/messages)。"""
+        self._request(
+            "POST",
+            f"/runs/{run_id}/context-builds",
+            json=build,
             expect_json=False,
         )
 

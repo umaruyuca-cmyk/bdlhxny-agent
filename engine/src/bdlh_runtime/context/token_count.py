@@ -4,6 +4,10 @@ import math
 import unicodedata
 from typing import Protocol
 
+#: 计数口径版本:CJK/标点每字 1 token,拉丁字母/数字每 4 字符 1 token。
+#: 写入工件与上下文处理报告(tokenizer_version),保证口径可辨。
+CONSERVATIVE_TOKENIZER_VERSION = "conservative-cjk1-latin4-v1"
+
 
 class TokenCounter(Protocol):
     def count(self, text: str) -> int: ...

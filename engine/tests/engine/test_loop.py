@@ -154,19 +154,24 @@ async def test_history_trimmed_to_n_turns(registry_snapshot):
 
 
 @pytest.mark.asyncio
-async def test_fixed_context_injected_into_message_sequence(registry_snapshot):
+async def test_fixed_context_injected_via_builder(registry_snapshot):
+    """任务二:固定上下文条目经 ContextBuilder 进入消息(不可信数据显式包裹)。"""
     llm = FakeChatModel([AIMessage(content="换房计划仍有效。")])
     loop = AgentLoop(llm=llm, catalog=catalog_from_snapshot(registry_snapshot), executor=_echo)
-    await loop.run(
+    result = await loop.run(
         AgentTurn(
             user_id="u1",
             message="对我的计划有影响吗",
             context_items=["两年内换房"],
         )
     )
-    joined = "\n".join(m.content for m in llm.seen[0] if isinstance(m, SystemMessage) and isinstance(m.content, str))
+    joined = "\n".join(
+        m.content for m in llm.seen[0] if isinstance(m.content, str)
+    )
     assert "两年内换房" in joined
-    assert "固定用例上下文" in joined
+    assert "<untrusted-data>" in joined  # 不可信条目由构建器包裹
+    assert result.context_report is not None
+    assert result.context_report.required_retained
 
 
 @pytest.mark.asyncio

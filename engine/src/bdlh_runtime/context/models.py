@@ -64,12 +64,20 @@ class ContextItem:
     owner_id: str | None = None
     trusted: bool = True
     sequence: int = 0
+    #: 条目来源类型(如 rule/news/position/manual_led);构建语义只看 classification,
+    #: item_type 仅供追溯展示(context_items.item_type)。
+    item_type: str = "generic"
+    #: bare=True 时按原文透传(不加 item 头、不包 <untrusted-data>);仅限可信指令
+    #: 条目(如系统提示),保证构建器接入后主链系统提示逐字不变。
+    bare: bool = False
 
     def __post_init__(self) -> None:
         if not self.item_id.strip():
             raise ValueError("item_id must not be empty")
         if not self.content.strip():
             raise ValueError(f"context item {self.item_id!r} must not be empty")
+        if self.bare and (not self.trusted or self.role is ContextRole.UNTRUSTED_DATA):
+            raise ValueError("bare context items must be trusted instruction entries")
 
 
 @dataclass(frozen=True)

@@ -51,6 +51,7 @@ from bdlh_runtime.evaluation.run_telemetry import (
     RunRecord,
     RunRecorder,
     classify_failure,
+    context_build_payload,
     payload_hash,
     record_output_guardrail,
     record_treatment_audits,
@@ -498,7 +499,8 @@ def _finalize_run(
         "prompt_hash": prompt_hash,
         "tool_catalog_hash": recorder.record.provenance.get("tool_catalog_hash", ""),
         "judge_version": JUDGE_VERSION,
-        "tokenizer_version": TOKENIZER_VERSION,
+        # 走过构建器的运行记构建器口径;未走的记消息估算口径
+        "tokenizer_version": (recorder.record.context_build or {}).get("tokenizerVersion") or TOKENIZER_VERSION,
     }
     if status == "COMPLETE":
         recorder.record_output(answer_excerpt=answer, audit_codes=audit_codes or [])
@@ -518,6 +520,36 @@ def _finalize_run(
         }
     )
     recorder.complete(status=status, error_category=category or None, error_text=judgment.error)
+
+
+def _attach_context_build(recorder: RunRecorder, result: AgentResult) -> None:
+    """完整模式运行:把循环内真实构建报告挂到运行记录(context_builds + 工件)。"""
+
+    if result.context_build_result is None:
+        # 罐头快路径未发生模型输入,无构建;如实记录
+        recorder.record_context(
+            {"strategy": "fixed-case-input", "status": "SKIPPED", "note": "罐头快路径,无模型输入"}
+        )
+        return
+    build = context_build_payload(
+        result.context_build_result,
+        list(result.context_items_used),
+        duration_ms=result.context_build_ms,
+    )
+    recorder.attach_context_build(build)
+    recorder.record_context(
+        {
+            "strategy": build["strategy"],
+            "itemCount": len(build["items"]),
+            "tokenBudget": build["tokenBudget"],
+            "originalTokens": build["originalTokens"],
+            "workingTokens": build["workingTokens"],
+            "requiredRetained": build["requiredRetained"],
+            "budgetFit": build["budgetFit"],
+            "tokenizerVersion": build["tokenizerVersion"],
+            "counts": build["counts"],
+        }
+    )
 
 
 async def run_ab_eval(
@@ -554,7 +586,7 @@ async def run_ab_eval(
     def build_executor() -> FrozenToolExecutor:
         return FrozenToolExecutor(frozen)
 
-    def new_recorder(case: ABCase, mode: str, repeat_index: int) -> RunRecorder:
+    def new_recorder(case: ABCase, mode: str, repeat_index: int, *, emit_context: bool = True) -> RunRecorder:
         recorder = RunRecorder(
             run_key=f"{case.id}:{mode}:{repeat_index}",
             case_id=case.id,
@@ -570,12 +602,16 @@ async def run_ab_eval(
             category=case.category,
         )
         recorder.record.provenance["tool_catalog_hash"] = catalog_hash
-        recorder.record_context(
-            strategy="fixed-case-input",
-            item_count=len(case.history),
-            history_turns=len(case.history),
-            token_budget=case.token_budget or None,
-        )
+        if emit_context:
+            recorder.record_context(
+                {
+                    "strategy": "fixed-case-input",
+                    "itemCount": len(case.history),
+                    "historyTurns": len(case.history),
+                    "tokenizerVersion": TOKENIZER_VERSION,
+                    **({"tokenBudget": case.token_budget} if case.token_budget else {}),
+                }
+            )
         return recorder
 
     def is_rate_limited(error: str | None) -> bool:
@@ -654,7 +690,7 @@ async def run_ab_eval(
             t_exec: Any = None
             t_error: str | None = None
             for attempt in range(_RETRY_ATTEMPTS):
-                t_recorder = new_recorder(case, MODE_TREATMENT, repeat_index)
+                t_recorder = new_recorder(case, MODE_TREATMENT, repeat_index, emit_context=False)
                 t_exec = RecordingExecutor(build_executor(), t_recorder)
                 try:
                     t_result, _inner_exec, _loop = await run_treatment(
@@ -670,6 +706,14 @@ async def run_ab_eval(
                     break
             t_recorder.mark_judgment_started()
             if t_result is None:
+                t_recorder.record_context(
+                    {
+                        "strategy": "fixed-case-input",
+                        "status": "FAILED",
+                        "note": "运行失败,循环内构建报告不可得",
+                        "tokenizerVersion": TOKENIZER_VERSION,
+                    }
+                )
                 t_judgment = RunJudgment(
                     error=t_error or "treatment 运行失败",
                     duration_ms=round((time.perf_counter() - t_started) * 1000),
@@ -678,6 +722,7 @@ async def run_ab_eval(
                 cr.treatment_runs.append(t_judgment)
                 cr.treatment_answers.append(f"（失败：{t_error}）")
             else:
+                _attach_context_build(t_recorder, t_result)
                 record_treatment_audits(t_recorder, t_result.audits, t_result.observations)
                 t_guard = guardrail.check(t_result.answer, t_result.observations)
                 record_output_guardrail(t_recorder, t_guard)

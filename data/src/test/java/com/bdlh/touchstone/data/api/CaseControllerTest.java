@@ -64,4 +64,32 @@ class CaseControllerTest {
         mvc.perform(get("/internal/v1/cases/missing/versions/1"))
                 .andExpect(status().isNotFound());
     }
+
+    @Test
+    void servesVariantContextForCompressionRunner() throws Exception {
+        when(repository.findVariantContext("ctx-port-01", 1, "budgeted-comp"))
+                .thenReturn(Optional.of(new com.bdlh.touchstone.data.domain.VariantContextView(
+                        "ctx-port-01", 1, "budgeted-comp", "budgeted", 12288, "data_fixture",
+                        List.of(new com.bdlh.touchstone.data.domain.VariantContextView.VariantContextItem(
+                                "rule-no-trading", "rule", "required",
+                                "不得自动下单或执行任何交易。", 100, true, 0,
+                                false, false, null, null, false, null, null)))));
+
+        mvc.perform(get("/internal/v1/cases/ctx-port-01/versions/1/variants/budgeted-comp/context"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contextStrategy").value("budgeted"))
+                .andExpect(jsonPath("$.tokenBudget").value(12288))
+                .andExpect(jsonPath("$.source").value("data_fixture"))
+                .andExpect(jsonPath("$.items[0].itemKey").value("rule-no-trading"))
+                .andExpect(jsonPath("$.items[0].classification").value("required"))
+                .andExpect(jsonPath("$.items[0].content").value("不得自动下单或执行任何交易。"));
+    }
+
+    @Test
+    void returnsNotFoundForUnknownVariantContext() throws Exception {
+        when(repository.findVariantContext("missing", 1, "default")).thenReturn(Optional.empty());
+
+        mvc.perform(get("/internal/v1/cases/missing/versions/1/variants/default/context"))
+                .andExpect(status().isNotFound());
+    }
 }

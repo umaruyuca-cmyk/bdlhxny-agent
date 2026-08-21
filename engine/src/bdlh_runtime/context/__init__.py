@@ -14,9 +14,10 @@ from .models import (
     ContextStrategy,
     ContextWindowError,
 )
-from .token_count import ConservativeTokenCounter, TokenCounter
+from .token_count import CONSERVATIVE_TOKENIZER_VERSION, ConservativeTokenCounter, TokenCounter
 
 __all__ = [
+    "CONSERVATIVE_TOKENIZER_VERSION",
     "ConservativeTokenCounter",
     "ContextAction",
     "ContextBuildRequest",

@@ -260,6 +260,8 @@ class ContextBuilder:
         )
 
     def _render(self, item: ContextItem, content: str) -> str:
+        if item.bare:
+            return content
         source = f" source={item.source_id}" if item.source_id else ""
         header = f"[context item={item.item_id} type={item.classification.value}{source}]"
         body = f"{header}\n{content}"

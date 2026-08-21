@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from bdlh_runtime.data_client import DataClient, DataServiceError
 from bdlh_runtime.evaluation.ab_eval import _report_payload, load_cases, run_ab_eval
+from bdlh_runtime.evaluation.context_eval import COMPARISON_VARIANTS
 from bdlh_runtime.evaluation.run_telemetry import (
     ARTIFACT_VERSION,
     RunRecord,
@@ -100,6 +101,20 @@ class LoginRequest(BaseModel):
 
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=200)
+
+
+class ContextBatchRequest(BaseModel):
+    """长上下文压缩对照批次:六套 ctx 用例 × (full-raw / budgeted-comp) 两变体。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    case_ids: list[str] | None = Field(default=None, max_length=100, description="ctx 用例子集;空表示全部对照变体")
+    runs: int = Field(default=1, ge=1, le=5, description="每变体重复次数")
+    model: str = Field(
+        default_factory=lambda: os.getenv("LLM_MODEL", "glm-4.7-flash"),
+        min_length=1,
+        max_length=100,
+    )
 
 
 @app.get("/health")
@@ -221,6 +236,76 @@ def get_job(job_id: str, account: Annotated[dict[str, Any], Depends(require_logi
     return job
 
 
+@app.post("/api/v1/context-batches")
+def start_context_batch(
+    request: ContextBatchRequest,
+    account: Annotated[dict[str, Any], Depends(require_login)],
+) -> dict[str, str]:
+    """长上下文压缩对照:同一 Agent、同一冻结数据,唯一变量是上下文处理策略。"""
+    data = _data()
+    try:
+        views = data.list_cases()
+        known = {
+            str(view["id"])
+            for view in views
+            if any(
+                str(item.get("variantId")) in COMPARISON_VARIANTS
+                for item in view.get("variants") or []
+            )
+        }
+        unknown = [case_id for case_id in request.case_ids or [] if case_id not in known]
+        if unknown:
+            raise HTTPException(status_code=400, detail=f"未知或非对照用例：{unknown}")
+        if not _BATCH_SLOTS.acquire(blocking=False):
+            raise HTTPException(status_code=429, detail="已有评测批次在运行，请等待完成后再发起")
+        selected = request.case_ids or sorted(known)
+        batch_id = data.create_batch(
+            name=f"上下文压缩对照 {datetime.now().astimezone().isoformat(timespec='seconds')}",
+            fixed_conditions={
+                "caseIds": selected,
+                "runsPerVariant": request.runs,
+                "variants": list(COMPARISON_VARIANTS),
+                "model": request.model,
+                "toolData": "frozen",
+            },
+        )
+    except DataServiceError as exc:
+        with contextlib.suppress(ValueError):
+            _BATCH_SLOTS.release()
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    job_id = uuid4().hex[:12]
+    job: dict[str, Any] = {
+        "job_id": job_id,
+        "batch_id": batch_id,
+        "status": "running",
+        "started_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+        "request": request.model_dump(),
+        "report": None,
+        "error": None,
+    }
+    _JOBS[job_id] = job
+
+    def task() -> None:
+        try:
+            payload, run_records = _execute_context_eval(request, views, selected)
+            _persist_runs(data, batch_id, request, payload, run_records)
+            _persist_artifact(batch_id, payload)
+            data.complete_batch(batch_id, "COMPLETE")
+            job["status"] = "done"
+            job["report"] = payload
+        except Exception as exc:  # 作业失败进入可见状态，不能让服务进程退出
+            with contextlib.suppress(DataServiceError):
+                data.complete_batch(batch_id, "FAILED")
+            job["status"] = "error"
+            job["error"] = f"{type(exc).__name__}: {exc}"
+        finally:
+            _BATCH_SLOTS.release()
+
+    threading.Thread(target=task, daemon=True).start()
+    return {"job_id": job_id, "batch_id": batch_id}
+
+
 @app.get("/api/v1/batches/{batch_id}")
 def get_batch(batch_id: str, account: Annotated[dict[str, Any], Depends(require_login)]) -> dict[str, Any]:
     try:
@@ -253,10 +338,31 @@ def _execute_eval(
     return _report_payload(report), report.run_records
 
 
+def _execute_context_eval(
+    request: ContextBatchRequest,
+    views: list[dict[str, Any]],
+    selected: list[str],
+) -> tuple[dict[str, Any], list[RunRecord]]:
+    from bdlh_runtime.evaluation.context_eval import (
+        _report_payload as context_report_payload,
+    )
+    from bdlh_runtime.evaluation.context_eval import (
+        load_context_variant_cases,
+        run_context_eval,
+    )
+
+    data = _data()
+    cases = [case for case in load_context_variant_cases(views, data) if case.case_id in set(selected)]
+    report = asyncio.run(
+        run_context_eval(cases=cases, model=request.model, runs_per_variant=request.runs, data=data)
+    )
+    return context_report_payload(report), report.run_records
+
+
 def _persist_runs(
     data: DataClient,
     batch_id: str,
-    request: EvalBatchRequest,
+    request: EvalBatchRequest | ContextBatchRequest,
     payload: dict[str, Any],
     run_records: list[RunRecord],
 ) -> None:
@@ -271,7 +377,9 @@ def _persist_runs(
             row["run_id"] = run_id
 
 
-def _persist_one_run(data: DataClient, batch_id: str, request: EvalBatchRequest, record: RunRecord) -> str:
+def _persist_one_run(
+    data: DataClient, batch_id: str, request: EvalBatchRequest | ContextBatchRequest, record: RunRecord
+) -> str:
     run_id = data.create_run(
         {
             "batchId": batch_id,
@@ -302,6 +410,8 @@ def _persist_one_run(data: DataClient, batch_id: str, request: EvalBatchRequest,
         data.save_guardrail_checks(run_id, [row.to_payload() for row in record.guardrail_checks])
     if record.measurements:
         data.save_measurements(run_id, record.measurements)
+    if record.context_build:
+        data.save_context_build(run_id, record.context_build)
 
     status = record.status
     error_category = record.error_category

@@ -23,6 +23,14 @@ from typing import Any
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.runnables import Runnable
 
+from bdlh_runtime.context import (
+    CONSERVATIVE_TOKENIZER_VERSION,
+    ConservativeTokenCounter,
+    ContextAction,
+    ContextBuildResult,
+    ContextItem,
+)
+
 # ── 事件类型(开发计划 §4.3 九类)──────────────────────────────────────────
 
 EVENT_RUN_STARTED = "run.started"
@@ -64,7 +72,8 @@ MODE_BASELINE = "baseline-tool-calling"
 MODE_REACT = "langgraph-react"
 MODE_TREATMENT = "full-system"
 
-# token 口径:API usage 缺失时按 chars//4 保守估算(任务二接入构建器后升级)
+# token 口径:model_call_messages 粗估用 chars//4;上下文构建用
+# ConservativeTokenCounter(版本见 context.token_count,工件 provenance 记录)
 TOKENIZER_VERSION = "conservative-chars4-v1"
 
 _RATE_LIMIT_MARKERS = ("429", "rate limit", "ratelimit", "too many requests", "请求过于频繁", "频率限制")
@@ -87,13 +96,15 @@ _UNAVAILABLE_MARKERS = (
     "model not found",
     "service unavailable",
 )
+#: 上下文构建失败(强制项超预算等)按评测环境错误处理,不算 Agent 失败样本
+_CONTEXT_BUILD_MARKERS = ("required context needs", "working context needs")
 
 
 def classify_failure(error: str | None) -> tuple[str, str]:
     """按错误文本分类 → (run_status, error_category)。
 
-    无错误返回 (COMPLETE, "");基础设施/环境类错误 → INVALID,不进能力统计;
-    其余为有效环境下的任务失败 → FAILED(失败样本)。
+    无错误返回 (COMPLETE, "");基础设施/环境类错误(429/余额/服务不可用/上下文
+    构建失败)→ INVALID,不进能力统计;其余为有效环境下的任务失败 → FAILED。
     """
 
     if not error:
@@ -103,6 +114,8 @@ def classify_failure(error: str | None) -> tuple[str, str]:
         return RUN_STATUS_INVALID, "RATE_LIMITED"
     if any(marker in text for marker in _BALANCE_MARKERS):
         return RUN_STATUS_INVALID, "INSUFFICIENT_BALANCE"
+    if any(marker in text for marker in _CONTEXT_BUILD_MARKERS):
+        return RUN_STATUS_INVALID, "CONTEXT_BUILD_FAILED"
     if any(marker in text for marker in _UNAVAILABLE_MARKERS):
         return RUN_STATUS_INVALID, "MODEL_SERVICE_UNAVAILABLE"
     return RUN_STATUS_FAILED, "AGENT_ERROR"
@@ -271,6 +284,8 @@ class RunRecord:
     error_category: str | None = None
     error_text: str | None = None
     provenance: dict[str, Any] = field(default_factory=dict)
+    #: 上下文构建报告(context_builds 落库载荷;未走构建器的组保持 None)
+    context_build: dict[str, Any] | None = None
 
 
 # ── RunRecorder:事件总线 + 明细收集 ──────────────────────────────────────
@@ -396,18 +411,13 @@ class RunRecorder:
 
     # -- 阶段事件 ------------------------------------------------------------
 
-    def record_context(
-        self, *, strategy: str, item_count: int, history_turns: int, token_budget: int | None = None
-    ) -> None:
-        payload: dict[str, Any] = {
-            "strategy": strategy,
-            "itemCount": item_count,
-            "historyTurns": history_turns,
-            "tokenizerVersion": TOKENIZER_VERSION,
-        }
-        if token_budget is not None:
-            payload["tokenBudget"] = token_budget
+    def record_context(self, payload: dict[str, Any]) -> None:
+        """context.completed 事件:payload 描述本次上下文处理(策略/条目数/token 等)。"""
         self.emit(EVENT_CONTEXT_COMPLETED, payload)
+
+    def attach_context_build(self, build: dict[str, Any]) -> None:
+        """挂载上下文构建报告(context_builds 落库载荷 + 工件 context 段真源)。"""
+        self.record.context_build = dict(build)
 
     def record_output(self, *, answer_excerpt: str, audit_codes: list[str] | None = None) -> None:
         self.record.answer_excerpt = answer_excerpt
@@ -456,7 +466,11 @@ class RunRecorder:
 def build_measurements(record: RunRecord, *, judgment_ms: int) -> dict[str, Any]:
     """分阶段测量(架构文档 §7.1 全链路口径中当前可观察的部分)。"""
 
+    build = record.context_build or {}
     return {
+        "contextCollectMs": int(build.get("durationMs") or 0),
+        # 压缩发生在构建内,未单独计时;compression tokens 见 context_build
+        "contextCompressMs": 0,
         "llmMs": sum(row.duration_ms for row in record.model_calls),
         "toolMs": sum(row.duration_ms for row in record.tool_calls),
         "guardrailMs": sum(row.duration_ms for row in record.guardrail_checks),
@@ -855,9 +869,141 @@ def record_output_guardrail(recorder: RunRecorder, guard_report: Any) -> None:
         )
 
 
+# ── 上下文构建报告 → context_builds 落库载荷 ─────────────────────────────
+
+COMPRESSION_VERSION = "structured-text-v1"
+
+
+def context_build_payload(
+    result: ContextBuildResult,
+    items: list[ContextItem],
+    *,
+    duration_ms: int,
+    status: str = "COMPLETE",
+    error_code: str | None = None,
+) -> dict[str, Any]:
+    """ContextBuildResult → data 服务 ``/runs/{id}/context-builds`` 请求体。
+
+    items 必须是本次构建的请求条目(与 report.decisions 一一对应)。
+    """
+
+    report = result.report
+    counter = ConservativeTokenCounter()
+    item_rows = [
+        {
+            "itemKey": item.item_id,
+            "itemType": item.item_type,
+            "classification": item.classification.value,
+            "content": item.content,
+            "sourceId": item.source_id,
+            "ownerId": item.owner_id,
+            "observedAt": item.observed_at,
+            "priority": item.priority,
+            "trusted": item.trusted,
+            "rawTokens": counter.count(item.content),
+            "contentHash": payload_hash(item.content),
+            "sequence": item.sequence,
+        }
+        for item in items
+    ]
+    decision_rows = []
+    for order, decision in enumerate(report.decisions):
+        source_item = next((item for item in items if item.item_id == decision.item_id), None)
+        decision_rows.append(
+            {
+                "itemKey": decision.item_id,
+                "action": decision.action.value,
+                "reason": decision.reason,
+                "inputTokens": decision.input_tokens,
+                "outputTokens": decision.output_tokens,
+                # 构建器不保留逐条渲染文本;压缩产物聚合在产出消息(working context)中
+                "outputContent": None,
+                "outputHash": None,
+                "referenceId": decision.source_id or (source_item.source_id if source_item else None),
+                "decisionOrder": order,
+            }
+        )
+    message_rows = [
+        {
+            "messageOrder": order,
+            "role": message.role,
+            "content": message.content,
+            "contentHash": payload_hash(message.content),
+            "tokens": counter.count(message.content),
+        }
+        for order, message in enumerate(result.messages)
+    ]
+    compressed = [decision for decision in report.decisions if decision.action is ContextAction.COMPRESSED]
+    return {
+        "strategy": report.strategy.value,
+        "tokenizerVersion": CONSERVATIVE_TOKENIZER_VERSION,
+        "compressionVersion": COMPRESSION_VERSION,
+        "tokenBudget": report.token_budget,
+        "originalTokens": report.original_tokens,
+        "workingTokens": report.working_tokens,
+        "compressionInputTokens": sum(decision.input_tokens for decision in compressed),
+        "compressionOutputTokens": sum(decision.output_tokens for decision in compressed),
+        "durationMs": max(0, duration_ms),
+        "requiredRetained": report.required_retained,
+        "budgetFit": report.budget_fit,
+        "referencesValid": True,
+        "instructionIsolated": True,
+        "status": status,
+        "errorCode": error_code,
+        "counts": report.counts,
+        "warnings": list(report.warnings),
+        "items": item_rows,
+        "decisions": decision_rows,
+        "messages": message_rows,
+    }
+
+
 # ── 九段统一工件(评测文档 §9)───────────────────────────────────────────
 
 ARTIFACT_VERSION = 1
+
+
+def _artifact_context_section(record: RunRecord) -> dict[str, Any]:
+    """工件 context 段:真源是上下文构建报告;未走构建器的组如实标注。"""
+
+    build = record.context_build
+    if not build:
+        return {
+            "strategy": record.context_strategy,
+            "raw_tokens": 0,
+            "working_tokens": 0,
+            "required_retained": None,
+            "selected_items": [],
+            "omitted_items": [],
+            "note": "本组模型输入不经 ContextBuilder(裸调用/官方 ReAct 直拼)",
+        }
+    decisions = build.get("decisions") or []
+    selected = [
+        str(row.get("itemKey"))
+        for row in decisions
+        if row.get("action") in {"kept", "compressed", "referenced"}
+    ]
+    omitted = [
+        str(row.get("itemKey"))
+        for row in decisions
+        if row.get("action") in {"omitted", "isolated"}
+    ]
+    section: dict[str, Any] = {
+        "strategy": build.get("strategy") or record.context_strategy,
+        "raw_tokens": int(build.get("originalTokens") or 0),
+        "working_tokens": int(build.get("workingTokens") or 0),
+        "required_retained": bool(build.get("requiredRetained")),
+        "budget_fit": bool(build.get("budgetFit")),
+        "token_budget": int(build.get("tokenBudget") or 0),
+        "counts": dict(build.get("counts") or {}),
+        "selected_items": selected,
+        "omitted_items": omitted,
+        "tokenizer_version": build.get("tokenizerVersion"),
+        "compression_version": build.get("compressionVersion"),
+    }
+    if build.get("errorCode"):
+        section["error_code"] = build["errorCode"]
+    return section
 
 
 def build_run_artifact(record: RunRecord) -> dict[str, Any]:
@@ -925,15 +1071,7 @@ def build_run_artifact(record: RunRecord) -> dict[str, Any]:
             "judge_version": record.provenance.get("judge_version", ""),
             "tokenizer_version": record.provenance.get("tokenizer_version", TOKENIZER_VERSION),
         },
-        "context": {
-            "strategy": record.context_strategy,
-            "raw_tokens": 0,
-            "working_tokens": 0,
-            "required_retained": None,
-            "selected_items": [],
-            "omitted_items": [],
-            "note": "任务二接入 ContextBuilder 后充实;当前为固定用例输入直传",
-        },
+        "context": _artifact_context_section(record),
         "steps": steps,
         "result": {
             "answer_excerpt": record.answer_excerpt[:200],
