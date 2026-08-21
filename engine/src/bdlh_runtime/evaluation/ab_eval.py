@@ -40,7 +40,7 @@ from bdlh_runtime.engine.output_guardrail import (
 from bdlh_runtime.evaluation.baseline_agent import BaselineResult, naive_run
 from bdlh_runtime.evaluation.baseline_langgraph import react_official_run
 from bdlh_runtime.evaluation.frozen_observations import FIXTURE_SET_ID, FrozenObservations
-from bdlh_runtime.infra.llm import create_llm
+from bdlh_runtime.infra.llm import DEFAULT_LLM_BASE_URL, create_llm
 from bdlh_runtime.registry import load_and_validate_payload
 from bdlh_runtime.tools.catalog import ToolCatalog, catalog_from_snapshot
 
@@ -389,6 +389,23 @@ def _summarize(runs: list[RunJudgment]) -> GroupSummary:
     )
 
 
+def build_llm_from_env(model: str) -> Any:
+    """按环境变量构建 LLM 客户端（配置唯一入口，不接受请求级 base_url/key）。
+
+    - ``LLM_API_KEY``：必填，缺失即失败；
+    - ``LLM_BASE_URL``：缺省智谱端点；
+    - 模型名由调用方传入（唯一请求级可配项，缺省取 ``LLM_MODEL``）。
+    """
+
+    api_key = os.getenv("LLM_API_KEY")
+    if not api_key:
+        raise RuntimeError("LLM_API_KEY 未设置")
+    llm = create_llm(api_key=api_key, model=model, base_url=os.getenv("LLM_BASE_URL") or DEFAULT_LLM_BASE_URL)
+    if llm is None:
+        raise RuntimeError("LLM 客户端创建失败")
+    return llm
+
+
 # ── 主 runner ───────────────────────────────────────────────────────────
 
 
@@ -403,12 +420,7 @@ async def run_ab_eval(
         raise ValueError("cases 为空：固定用例必须由调用方通过 load_cases 从 data 服务加载")
     selected = cases
     if llm is None:
-        api_key = os.getenv("LLM_API_KEY") or os.getenv("DEEPSEEK_API_KEY")
-        if not api_key:
-            raise RuntimeError("LLM_API_KEY 未设置")
-        llm = create_llm(api_key=api_key, model=model)
-        if llm is None:
-            raise RuntimeError("LLM 客户端创建失败")
+        llm = build_llm_from_env(model)
 
     data = DataClient()
     catalog = catalog_from_snapshot(load_and_validate_payload(data.get_tool_catalog()))
@@ -754,7 +766,12 @@ def _report_payload(report: ABReport) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="A/B eval: baseline vs treatment")
     parser.add_argument("--runs", type=int, default=5, help="每个 case 跑几次（默认 5）")
-    parser.add_argument("--model", type=str, default="glm-4.7-flash", help="模型名（默认 glm-4.7-flash）")
+    parser.add_argument(
+        "--model",
+        type=str,
+        default=os.getenv("LLM_MODEL", "glm-4.7-flash"),
+        help="模型名（默认取 LLM_MODEL 环境变量，缺省 glm-4.7-flash）",
+    )
     parser.add_argument("--no-write-report", action="store_true")
     parser.add_argument(
         "--no-with-react", dest="with_react", action="store_false", help="跳过 LangGraph 官方 ReAct 对照组（默认运行）"

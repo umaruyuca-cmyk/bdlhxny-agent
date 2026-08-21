@@ -60,7 +60,12 @@ class EvalBatchRequest(BaseModel):
     case_ids: list[str] | None = Field(default=None, max_length=100, description="固定题号子集；空表示全部")
     runs: int = Field(default=1, ge=1, le=5, description="每题每种实现的重复次数")
     include_react: bool = Field(default=True, description="是否包含 LangGraph ReAct 实现")
-    model: str = Field(default="glm-4.7-flash", min_length=1, max_length=100)
+    model: str = Field(
+        default_factory=lambda: os.getenv("LLM_MODEL", "glm-4.7-flash"),
+        min_length=1,
+        max_length=100,
+        description="模型名；缺省取 LLM_MODEL 环境变量（唯一请求级可配项，base_url 与密钥只在服务端环境变量）",
+    )
 
 
 class LoginRequest(BaseModel):
