@@ -25,7 +25,22 @@ public class CaseRepository {
                               ) ORDER BY s.step_number)
                        FROM touchstone.case_steps s
                        WHERE s.case_id = d.id AND s.case_version = v.version
-                   ), '[]'::jsonb) AS steps
+                   ), '[]'::jsonb) AS steps,
+                   COALESCE((
+                       SELECT jsonb_agg(jsonb_build_object(
+                                  'variantId', cv.variant_id,
+                                  'contextStrategy', cv.context_strategy,
+                                  'tokenBudget', cv.token_budget,
+                                  'snapshotId', ds.id,
+                                  'snapshotHash', ds.source_hash
+                              ) ORDER BY cv.variant_id)
+                       FROM touchstone.case_variants cv
+                       LEFT JOIN touchstone.data_snapshots ds
+                         ON ds.case_id = cv.case_id
+                        AND ds.case_version = cv.case_version
+                        AND ds.variant_id = cv.variant_id
+                       WHERE cv.case_id = d.id AND cv.case_version = v.version
+                   ), '[]'::jsonb) AS variants
             FROM touchstone.case_definitions d
             JOIN touchstone.case_versions v
               ON v.case_id = d.id
@@ -76,7 +91,8 @@ public class CaseRepository {
                 rs.getInt("token_budget"),
                 readJson(rs.getString("expected_checks")),
                 rs.getBoolean("public"),
-                readJson(rs.getString("steps")));
+                readJson(rs.getString("steps")),
+                readJson(rs.getString("variants")));
     }
 
     private JsonNode readJson(String value) throws SQLException {

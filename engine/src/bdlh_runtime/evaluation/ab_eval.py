@@ -30,7 +30,7 @@ from typing import Any
 from langchain_core.messages import AIMessage
 
 from bdlh_runtime.data_client import DataClient
-from bdlh_runtime.engine.loop import AgentLoop, AgentResult, AgentTurn
+from bdlh_runtime.engine.loop import AgentLoop, AgentResult, AgentTurn, load_prompt
 from bdlh_runtime.engine.output_guardrail import (
     C1ComplianceCheck,
     C2ComplianceCheck,
@@ -41,6 +41,21 @@ from bdlh_runtime.engine.semantic_router.fastpath_data import CHITCHAT_RESPONSE,
 from bdlh_runtime.evaluation.baseline_agent import BASELINE_SYSTEM, BaselineResult, naive_run
 from bdlh_runtime.evaluation.baseline_langgraph import react_official_run
 from bdlh_runtime.evaluation.frozen_observations import FIXTURE_SET_ID, FrozenObservations
+from bdlh_runtime.evaluation.run_telemetry import (
+    MODE_BASELINE,
+    MODE_REACT,
+    MODE_TREATMENT,
+    TOKENIZER_VERSION,
+    RecordingExecutor,
+    RecordingLLM,
+    RunRecord,
+    RunRecorder,
+    classify_failure,
+    payload_hash,
+    record_output_guardrail,
+    record_treatment_audits,
+    validity_of,
+)
 from bdlh_runtime.infra.llm import DEFAULT_LLM_BASE_URL, create_llm
 from bdlh_runtime.registry import load_and_validate_payload
 from bdlh_runtime.tools.catalog import ToolCatalog, catalog_from_snapshot
@@ -62,6 +77,25 @@ class ABCase:
     fastpath: str | None = None
     expected_tools: tuple[str, ...] = ()
     absent_tools: tuple[str, ...] = ()
+    # 用例版本与真实变体/快照标识(来自 data 服务,运行记录据此关联
+    # case_variants / data_snapshots,不再本地拼接)
+    case_version: int = 1
+    variant_id: str = "default"
+    snapshot_id: str = ""
+    snapshot_hash: str = ""
+    context_strategy: str = "budgeted"
+    token_budget: int = 0
+
+
+def _default_variant(view: dict[str, Any]) -> dict[str, Any]:
+    """取 default 变体条目;缺失即 fail-fast,禁止回退为拼接字符串。"""
+    variants = view.get("variants")
+    if not isinstance(variants, list):
+        raise ValueError(f"case {view.get('id')} 视图缺少 variants(data 服务需提供真实变体/快照标识)")
+    for item in variants:
+        if isinstance(item, dict) and str(item.get("variantId")) == "default":
+            return item
+    raise ValueError(f"case {view.get('id')} 没有 default 变体")
 
 
 def load_cases(views: list[dict[str, Any]]) -> list[ABCase]:
@@ -82,6 +116,7 @@ def load_cases(views: list[dict[str, Any]]) -> list[ABCase]:
             for step in steps[:-1]
         )
         fastpath = checks.get("fastpath")
+        variant = _default_variant(view)
         cases.append(
             ABCase(
                 id=str(view["id"]),
@@ -93,6 +128,12 @@ def load_cases(views: list[dict[str, Any]]) -> list[ABCase]:
                 fastpath=fastpath if isinstance(fastpath, str) and fastpath else None,
                 expected_tools=tuple(checks.get("expected_tools") or ()),
                 absent_tools=tuple(checks.get("absent_tools") or ()),
+                case_version=int(view.get("version") or 1),
+                variant_id=str(variant.get("variantId") or "default"),
+                snapshot_id=str(variant.get("snapshotId") or ""),
+                snapshot_hash=str(variant.get("snapshotHash") or ""),
+                context_strategy=str(variant.get("contextStrategy") or "budgeted"),
+                token_budget=int(variant.get("tokenBudget") or 0),
             )
         )
     return cases
@@ -161,6 +202,11 @@ class RunJudgment:
     duration_ms: int = 0
     # 异常
     error: str | None = None
+    # 运行追溯与有效性(架构文档 §7.1):INVALID 不进能力统计
+    run_key: str = ""
+    repeat_index: int = 0
+    validity: str = "VALID"
+    error_category: str | None = None
 
 
 @dataclass
@@ -182,7 +228,7 @@ class CaseReport:
 
 @dataclass
 class GroupSummary:
-    """聚合指标。"""
+    """聚合指标(仅 VALID 运行进入分母;无效运行单列)。"""
 
     tool_selection_rate: float = 0.0
     hallucination_rate: float = 0.0
@@ -195,6 +241,10 @@ class GroupSummary:
     median_duration_ms: int = 0
     p95_duration_ms: int = 0
     error_count: int = 0
+    total_runs: int = 0
+    valid_runs: int = 0
+    invalid_runs: int = 0
+    invalid_reasons: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass
@@ -207,6 +257,7 @@ class ABReport:
     cases: list[CaseReport] = field(default_factory=list)
     model: str = "glm-4.7"
     executor: str = "frozen"
+    run_records: list[RunRecord] = field(default_factory=list)
 
 
 # ── 运行函数 ────────────────────────────────────────────────────────────
@@ -245,18 +296,6 @@ def _extract_treatment_tokens(result: AgentResult) -> tuple[int, int, bool]:
 
 def _count_rounds(messages: list[Any]) -> int:
     return sum(1 for msg in messages if isinstance(msg, AIMessage))
-
-
-async def run_baseline(case: ABCase, llm: Any, all_cards: list[Any], executor: Any) -> tuple[BaselineResult, Any]:
-    result = await naive_run(
-        message=case.message,
-        history=list(case.history),
-        all_cards=all_cards,
-        llm=llm,
-        executor=executor,
-        system_prompt=BASELINE_SYSTEM,
-    )
-    return result, executor
 
 
 async def run_treatment(case: ABCase, llm: Any, catalog: ToolCatalog, executor: Any) -> tuple[AgentResult, Any, Any]:
@@ -371,23 +410,38 @@ def _judge_treatment(
 
 
 def _summarize(runs: list[RunJudgment]) -> GroupSummary:
-    n = len(runs)
+    """聚合口径(任务一):只有 VALID 运行进入分母;INVALID(429/余额/服务不可用)
+    单列数量与原因分组,不冒充失败样本。"""
+
+    valid = [r for r in runs if r.validity != "INVALID"]
+    invalid = [r for r in runs if r.validity == "INVALID"]
+    reasons: dict[str, int] = {}
+    for run in invalid:
+        key = run.error_category or "UNCLASSIFIED"
+        reasons[key] = reasons.get(key, 0) + 1
+    n = len(valid)
     if n == 0:
-        return GroupSummary()
-    durations = sorted(r.duration_ms for r in runs)
+        return GroupSummary(
+            total_runs=len(runs), valid_runs=0, invalid_runs=len(invalid), invalid_reasons=reasons
+        )
+    durations = sorted(r.duration_ms for r in valid)
     p95_index = max(0, min(n - 1, (95 * n + 99) // 100 - 1))
     return GroupSummary(
-        tool_selection_rate=sum(1 for r in runs if r.tool_correct) / n,
-        hallucination_rate=sum(1 for r in runs if r.hallucinated_tools) / n,
-        forbidden_leak_rate=sum(1 for r in runs if r.forbidden_leak) / n,
-        number_hallucination_rate=sum(1 for r in runs if r.number_hallucinations) / n,
-        c1_violation_rate=sum(1 for r in runs if r.c1_violations) / n,
-        c2_violation_rate=sum(1 for r in runs if r.c2_violations) / n,
-        mean_rounds=sum(r.rounds for r in runs) / n,
-        mean_tokens=sum(r.prompt_tokens + r.completion_tokens for r in runs) // n,
+        tool_selection_rate=sum(1 for r in valid if r.tool_correct) / n,
+        hallucination_rate=sum(1 for r in valid if r.hallucinated_tools) / n,
+        forbidden_leak_rate=sum(1 for r in valid if r.forbidden_leak) / n,
+        number_hallucination_rate=sum(1 for r in valid if r.number_hallucinations) / n,
+        c1_violation_rate=sum(1 for r in valid if r.c1_violations) / n,
+        c2_violation_rate=sum(1 for r in valid if r.c2_violations) / n,
+        mean_rounds=sum(r.rounds for r in valid) / n,
+        mean_tokens=sum(r.prompt_tokens + r.completion_tokens for r in valid) // n,
         median_duration_ms=round(statistics.median(durations)),
         p95_duration_ms=durations[p95_index],
-        error_count=sum(1 for r in runs if r.error),
+        error_count=sum(1 for r in valid if r.error),
+        total_runs=len(runs),
+        valid_runs=n,
+        invalid_runs=len(invalid),
+        invalid_reasons=reasons,
     )
 
 
@@ -410,6 +464,61 @@ def build_llm_from_env(model: str) -> Any:
 
 # ── 主 runner ───────────────────────────────────────────────────────────
 
+#: 机械判官版本(与 data 服务 evaluation_results.evaluator_version 一致)
+JUDGE_VERSION = "fixed-rules-v1"
+
+_RETRY_ATTEMPTS = 3
+
+
+def _tool_catalog_hash(catalog: ToolCatalog) -> str:
+    cards = [
+        {"name": card.name, "description": card.description, "parameters": card.parameters}
+        for card in sorted(catalog.list(), key=lambda item: item.name)
+    ]
+    return payload_hash(cards)
+
+
+def _finalize_run(
+    recorder: RunRecorder,
+    judgment: RunJudgment,
+    *,
+    answer: str,
+    prompt_hash: str,
+    audit_codes: list[str] | None = None,
+) -> None:
+    """判官结论落事件流;有效性分类(§7.1)并写入工件 provenance。"""
+
+    status, category = classify_failure(judgment.error)
+    judgment.validity = validity_of(status)
+    judgment.error_category = category or None
+    judgment.run_key = recorder.record.run_key
+    judgment.repeat_index = recorder.record.repeat_index
+    recorder.record.provenance = {
+        "git_commit": os.getenv("GIT_COMMIT", "unknown"),
+        "prompt_hash": prompt_hash,
+        "tool_catalog_hash": recorder.record.provenance.get("tool_catalog_hash", ""),
+        "judge_version": JUDGE_VERSION,
+        "tokenizer_version": TOKENIZER_VERSION,
+    }
+    if status == "COMPLETE":
+        recorder.record_output(answer_excerpt=answer, audit_codes=audit_codes or [])
+    recorder.record_judgment(
+        {
+            "tool_correct": judgment.tool_correct,
+            "hallucinated_tools": judgment.hallucinated_tools,
+            "forbidden_leak": judgment.forbidden_leak,
+            "number_hallucinations": judgment.number_hallucinations,
+            "c1_violations": judgment.c1_violations,
+            "c2_violations": judgment.c2_violations,
+            "rounds": judgment.rounds,
+            "tokens_estimated": judgment.tokens_estimated,
+            "error": judgment.error,
+            "validity": judgment.validity,
+            "error_category": judgment.error_category,
+        }
+    )
+    recorder.complete(status=status, error_category=category or None, error_text=judgment.error)
+
 
 async def run_ab_eval(
     runs_per_case: int = 5,
@@ -417,91 +526,170 @@ async def run_ab_eval(
     model: str = "glm-4.7-flash",
     with_react: bool = True,
     cases: list[ABCase] | None = None,
+    *,
+    catalog: ToolCatalog | None = None,
+    frozen: FrozenObservations | None = None,
+    retry_delay_s: float = 30.0,
+    inter_run_delay_s: float = 1.0,
 ) -> ABReport:
+    """跑一轮对照批次;每次执行(case × mode × repeat)产出完整 RunRecord。"""
+
     if not cases:
         raise ValueError("cases 为空：固定用例必须由调用方通过 load_cases 从 data 服务加载")
     selected = cases
     if llm is None:
         llm = build_llm_from_env(model)
 
-    data = DataClient()
-    catalog = catalog_from_snapshot(load_and_validate_payload(data.get_tool_catalog()))
-    frozen = FrozenObservations(data.get_tool_fixtures(FIXTURE_SET_ID))
+    if catalog is None or frozen is None:
+        data = DataClient()
+        catalog = catalog_from_snapshot(load_and_validate_payload(data.get_tool_catalog()))
+        frozen = FrozenObservations(data.get_tool_fixtures(FIXTURE_SET_ID))
     catalog_names = {c.name for c in catalog.list()}
     all_cards = [c for c in catalog.list() if c.name != "search_tools"]
     guardrail = OutputGuardrail()
+    catalog_hash = _tool_catalog_hash(catalog)
+    baseline_prompt_hash = payload_hash(BASELINE_SYSTEM)
+    treatment_prompt_hash = payload_hash(load_prompt("system_base.md", "scene_chat.md"))
 
     def build_executor() -> FrozenToolExecutor:
         return FrozenToolExecutor(frozen)
 
+    def new_recorder(case: ABCase, mode: str, repeat_index: int) -> RunRecorder:
+        recorder = RunRecorder(
+            run_key=f"{case.id}:{mode}:{repeat_index}",
+            case_id=case.id,
+            case_version=case.case_version,
+            variant_id=case.variant_id,
+            snapshot_id=case.snapshot_id,
+            snapshot_hash=case.snapshot_hash,
+            agent_mode=mode,
+            context_strategy="fixed-case-input",
+            model=model,
+            repeat_index=repeat_index,
+            message=case.message,
+            category=case.category,
+        )
+        recorder.record.provenance["tool_catalog_hash"] = catalog_hash
+        recorder.record_context(
+            strategy="fixed-case-input",
+            item_count=len(case.history),
+            history_turns=len(case.history),
+            token_budget=case.token_budget or None,
+        )
+        return recorder
+
+    def is_rate_limited(error: str | None) -> bool:
+        return bool(error) and "429" in str(error)
+
+    run_records: list[RunRecord] = []
     case_reports: list[CaseReport] = []
     for case in selected:
         cr = CaseReport(case_id=case.id, category=case.category, message=case.message)
-        for _ in range(runs_per_case):
+        for repeat_index in range(runs_per_case):
             # Baseline (with 429 retry)
             b_started = time.perf_counter()
-            b_result, b_exec = None, None
-            for attempt in range(3):
-                b_result, b_exec = await run_baseline(case, llm, all_cards, build_executor())
-                if b_result.error and "429" in b_result.error and attempt < 2:
-                    print(f"    baseline 429, retry in 30s ({attempt + 1}/3)")
-                    await asyncio.sleep(30)
+            b_recorder: RunRecorder | None = None
+            b_result: BaselineResult | None = None
+            b_exec: Any = None
+            for attempt in range(_RETRY_ATTEMPTS):
+                b_recorder = new_recorder(case, MODE_BASELINE, repeat_index)
+                b_exec = RecordingExecutor(build_executor(), b_recorder)
+                b_result = await naive_run(
+                    message=case.message,
+                    history=list(case.history),
+                    all_cards=all_cards,
+                    llm=RecordingLLM(llm, b_recorder, model),
+                    executor=b_exec,
+                    system_prompt=BASELINE_SYSTEM,
+                )
+                if is_rate_limited(b_result.error) and attempt < _RETRY_ATTEMPTS - 1:
+                    print(f"    baseline 429, retry in {retry_delay_s:.0f}s ({attempt + 1}/{_RETRY_ATTEMPTS})")
+                    await asyncio.sleep(retry_delay_s)
                     continue
                 break
+            b_recorder.mark_judgment_started()
             b_judgment = _judge_baseline(case, b_result, b_exec, catalog_names)
             b_judgment.duration_ms = round((time.perf_counter() - b_started) * 1000)
+            _finalize_run(b_recorder, b_judgment, answer=b_result.answer or "", prompt_hash=baseline_prompt_hash)
             cr.baseline_runs.append(b_judgment)
-            cr.baseline_answers.append(b_result.answer[:200])
-            await asyncio.sleep(1.0)
+            cr.baseline_answers.append((b_result.answer or "")[:200])
+            run_records.append(b_recorder.record)
+            await asyncio.sleep(inter_run_delay_s)
 
             # LangGraph 官方 ReAct 对照组（可选；带 429 重试）
             if with_react:
                 r_started = time.perf_counter()
-                r_exec = build_executor()
-                for attempt in range(3):
+                r_recorder: RunRecorder | None = None
+                r_result: BaselineResult | None = None
+                r_exec: Any = None
+                for attempt in range(_RETRY_ATTEMPTS):
+                    r_recorder = new_recorder(case, MODE_REACT, repeat_index)
+                    r_exec = RecordingExecutor(build_executor(), r_recorder)
                     r_result = await react_official_run(
                         message=case.message,
                         history=list(case.history),
                         all_cards=all_cards,
-                        llm=llm,
+                        llm=RecordingLLM(llm, r_recorder, model),
                         executor=r_exec,
                         system_prompt=BASELINE_SYSTEM,
                     )
-                    if r_result.error and "429" in r_result.error and attempt < 2:
-                        print(f"    react 429, retry in 30s ({attempt + 1}/3)")
-                        await asyncio.sleep(30)
+                    if is_rate_limited(r_result.error) and attempt < _RETRY_ATTEMPTS - 1:
+                        print(f"    react 429, retry in {retry_delay_s:.0f}s ({attempt + 1}/{_RETRY_ATTEMPTS})")
+                        await asyncio.sleep(retry_delay_s)
                         continue
                     break
+                r_recorder.mark_judgment_started()
                 r_judgment = _judge_react(case, r_result, r_exec, catalog_names)
                 r_judgment.duration_ms = round((time.perf_counter() - r_started) * 1000)
+                _finalize_run(r_recorder, r_judgment, answer=r_result.answer or "", prompt_hash=baseline_prompt_hash)
                 cr.react_runs.append(r_judgment)
-                cr.react_answers.append(r_result.answer[:200])
-                await asyncio.sleep(1.0)
+                cr.react_answers.append((r_result.answer or "")[:200])
+                run_records.append(r_recorder.record)
+                await asyncio.sleep(inter_run_delay_s)
 
             # Treatment (with 429 retry)
             t_started = time.perf_counter()
-            t_result, t_exec, t_loop = None, None, None
-            for attempt in range(3):
+            t_recorder: RunRecorder | None = None
+            t_result: AgentResult | None = None
+            t_exec: Any = None
+            t_error: str | None = None
+            for attempt in range(_RETRY_ATTEMPTS):
+                t_recorder = new_recorder(case, MODE_TREATMENT, repeat_index)
+                t_exec = RecordingExecutor(build_executor(), t_recorder)
                 try:
-                    t_result, t_exec, t_loop = await run_treatment(case, llm, catalog, build_executor())
-                    break
-                except Exception as exc:
-                    if "429" in str(exc) and attempt < 2:
-                        print(f"    treatment 429, retry in 30s ({attempt + 1}/3)")
-                        await asyncio.sleep(30)
-                        continue
-                    t_result = None
-                    t_exec = FrozenToolExecutor(frozen)
-                    cr.treatment_runs.append(
-                        RunJudgment(error=str(exc), duration_ms=round((time.perf_counter() - t_started) * 1000))
+                    t_result, _inner_exec, _loop = await run_treatment(
+                        case, RecordingLLM(llm, t_recorder, model), catalog, t_exec
                     )
-                    cr.treatment_answers.append(f"（失败：{exc}）")
-                    t_result = "FAILED"
                     break
-            if t_result != "FAILED":
+                except Exception as exc:  # noqa: BLE001 —— 异常降级为一次运行,不中断批次
+                    if "429" in str(exc) and attempt < _RETRY_ATTEMPTS - 1:
+                        print(f"    treatment 429, retry in {retry_delay_s:.0f}s ({attempt + 1}/{_RETRY_ATTEMPTS})")
+                        await asyncio.sleep(retry_delay_s)
+                        continue
+                    t_error = str(exc)
+                    break
+            t_recorder.mark_judgment_started()
+            if t_result is None:
+                t_judgment = RunJudgment(
+                    error=t_error or "treatment 运行失败",
+                    duration_ms=round((time.perf_counter() - t_started) * 1000),
+                )
+                _finalize_run(t_recorder, t_judgment, answer="", prompt_hash=treatment_prompt_hash)
+                cr.treatment_runs.append(t_judgment)
+                cr.treatment_answers.append(f"（失败：{t_error}）")
+            else:
+                record_treatment_audits(t_recorder, t_result.audits, t_result.observations)
                 t_guard = guardrail.check(t_result.answer, t_result.observations)
+                record_output_guardrail(t_recorder, t_guard)
                 t_judgment = _judge_treatment(case, t_result, t_guard, t_exec, catalog_names)
                 t_judgment.duration_ms = round((time.perf_counter() - t_started) * 1000)
+                _finalize_run(
+                    t_recorder,
+                    t_judgment,
+                    answer=t_guard.fixed_answer,
+                    prompt_hash=treatment_prompt_hash,
+                    audit_codes=t_guard.audit_codes,
+                )
                 cr.treatment_runs.append(t_judgment)
                 cr.treatment_answers.append(t_guard.fixed_answer[:200])
                 cr.lineage = [
@@ -513,7 +701,8 @@ async def run_ab_eval(
                     }
                     for tool_name, args, result in t_exec.results
                 ]
-            await asyncio.sleep(1.0)
+            run_records.append(t_recorder.record)
+            await asyncio.sleep(inter_run_delay_s)
 
         react_part = ""
         if with_react:
@@ -538,6 +727,7 @@ async def run_ab_eval(
         cases=case_reports,
         model=model,
         executor="frozen",
+        run_records=run_records,
     )
 
 
@@ -561,6 +751,13 @@ def _token_pct(baseline: int, treatment: int) -> str:
     return f"{delta:+.0f}%"
 
 
+def _invalid_summary(label: str, group: GroupSummary) -> str | None:
+    if group.invalid_runs <= 0:
+        return None
+    reasons = ", ".join(f"{key}×{count}" for key, count in sorted(group.invalid_reasons.items()))
+    return f"- {label}:无效 {group.invalid_runs}/{group.total_runs}({reasons})"
+
+
 def render_markdown(report: ABReport) -> str:
     b, t = report.baseline, report.treatment
     r = report.react
@@ -582,6 +779,21 @@ def render_markdown(report: ABReport) -> str:
         "- 完整工程模式（本系统）：Guardrail Middleware G1-G7 + Selective Tool Loading + Semantic Fast-Path + Output Guardrail",
         "- 工具执行器：冻结数据（各组共用同一份结果，隔离外部服务和数据变化）",
         "- 路由：GoldRouter（金标快路径，隔离路由误差；仅 T 组接入快路径）",
+    ]
+    invalid_rows = [
+        row
+        for row in (
+            _invalid_summary("裸调用", b),
+            _invalid_summary("官方ReAct", r) if has_react else None,
+            _invalid_summary("完整模式", t),
+        )
+        if row is not None
+    ]
+    if invalid_rows:
+        lines.append("")
+        lines.append("**无效运行(不进入指标分母)**:")
+        lines.extend(invalid_rows)
+    lines += [
         "",
         "## 总表",
         "",
@@ -699,6 +911,8 @@ def render_markdown(report: ABReport) -> str:
             "- 数字幻觉率：answer 里的非平凡数字不在任何 Observation 中的运行比例",
             "- C-1/C-2 违规率：answer 含交易/适当性语义的运行比例",
             "- token：prompt_tokens + completion_tokens（从 API response 累计）",
+            "- 有效样本：仅 VALID 运行进入各组分母；429/余额不足/模型服务不可用等 INVALID 运行单列,不冒充失败样本",
+            "- 单次运行追溯:每行指标可经 run_key → run_id 下钻事件流与逐步明细(工件 runs/{run_id}.json)",
         ]
     )
     if has_react:
@@ -715,15 +929,34 @@ def render_markdown(report: ABReport) -> str:
 
 
 def _agg_runs(runs: list[RunJudgment]) -> dict[str, Any]:
-    durations = sorted(r.duration_ms for r in runs)
+    valid = [r for r in runs if r.validity != "INVALID"]
+    invalid = [r for r in runs if r.validity == "INVALID"]
+    reasons: dict[str, int] = {}
+    for run in invalid:
+        key = run.error_category or "UNCLASSIFIED"
+        reasons[key] = reasons.get(key, 0) + 1
+    durations = sorted(r.duration_ms for r in valid)
     p95_index = max(0, min(len(durations) - 1, (95 * len(durations) + 99) // 100 - 1)) if durations else 0
     return {
-        "correct": sum(1 for r in runs if r.tool_correct),
-        "hallucinated": sum(1 for r in runs if r.hallucinated_tools or r.forbidden_leak),
+        "correct": sum(1 for r in valid if r.tool_correct),
+        "hallucinated": sum(1 for r in valid if r.hallucinated_tools or r.forbidden_leak),
         "total": len(runs),
+        "valid": len(valid),
+        "invalid": len(invalid),
+        "invalid_reasons": reasons,
         "estimated_token_runs": sum(1 for r in runs if r.tokens_estimated),
         "duration_p50_ms": round(statistics.median(durations)) if durations else 0,
         "duration_p95_ms": durations[p95_index] if durations else 0,
+        "runs": [
+            {
+                "run_key": r.run_key,
+                "repeat_index": r.repeat_index,
+                "validity": r.validity,
+                "tool_correct": r.tool_correct,
+                "error_category": r.error_category,
+            }
+            for r in runs
+        ],
     }
 
 
@@ -763,6 +996,19 @@ def _report_payload(report: ABReport) -> dict[str, Any]:
         "case_count": report.case_count,
         "groups": groups,
         "cases": cases,
+        "run_records": [
+            {
+                "run_key": record.run_key,
+                "case_id": record.case_id,
+                "agent_mode": record.agent_mode,
+                "repeat_index": record.repeat_index,
+                "status": record.status,
+                "validity": validity_of(record.status),
+                "error_category": record.error_category,
+                "run_id": record.run_id,
+            }
+            for record in report.run_records
+        ],
     }
 
 

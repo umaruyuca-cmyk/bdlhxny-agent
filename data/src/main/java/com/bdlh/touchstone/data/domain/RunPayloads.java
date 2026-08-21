@@ -106,4 +106,81 @@ public final class RunPayloads {
             JsonNode output,
             String errorCategory,
             String errorMessage) {}
+
+    public record ModelCallMessageInput(
+            @Min(0) int messageOrder,
+            @NotBlank String role,
+            String content,
+            String contentRef,
+            @Min(0) int tokens,
+            @NotBlank String contentHash) {}
+
+    public record ModelCallInput(
+            @Min(0) int sequence,
+            @NotBlank String purpose,
+            @NotBlank String model,
+            @NotBlank String requestHash,
+            String responseHash,
+            @Min(0) int inputTokens,
+            @Min(0) int outputTokens,
+            @Min(0) long durationMs,
+            @Min(0) int retryCount,
+            @NotBlank String status,
+            String errorCategory,
+            List<@Valid ModelCallMessageInput> messages) {}
+
+    public record SaveModelCallsRequest(@NotEmpty List<@Valid ModelCallInput> calls) {}
+
+    public record ToolCallInput(
+            @Min(0) int sequence,
+            @NotBlank String toolName,
+            @NotNull JsonNode arguments,
+            @NotBlank String argumentsHash,
+            @NotBlank String status,
+            JsonNode resultSummary,
+            String resultHash,
+            String sourceTime,
+            @Min(0) long durationMs,
+            String auditCode,
+            boolean fixtureHit,
+            String errorCategory) {}
+
+    public record SaveToolCallsRequest(@NotEmpty List<@Valid ToolCallInput> calls) {}
+
+    public record GuardrailCheckInput(
+            @Min(0) int sequence,
+            @NotBlank String stage,
+            @NotBlank String decision,
+            String auditCode,
+            JsonNode ruleIds,
+            JsonNode reasons,
+            String toolName,
+            @Min(0) long durationMs,
+            JsonNode detail) {}
+
+    public record SaveGuardrailChecksRequest(@NotEmpty List<@Valid GuardrailCheckInput> checks) {}
+
+    public record SaveMeasurementsRequest(
+            @Min(0) long queueMs,
+            @Min(0) long snapshotMs,
+            @Min(0) long contextCollectMs,
+            @Min(0) long contextCompressMs,
+            @Min(0) long toolLoadingMs,
+            @Min(0) long llmMs,
+            @Min(0) long toolMs,
+            @Min(0) long guardrailMs,
+            @Min(0) long judgmentMs,
+            Long firstOutputMs,
+            @Min(0) long totalDurationMs,
+            @Min(0) int promptTokens,
+            @Min(0) int cachedPromptTokens,
+            @Min(0) int completionTokens,
+            @Min(0) int compressionInputTokens,
+            @Min(0) int compressionOutputTokens) {}
+
+    public record SaveArtifactRequest(
+            @NotBlank String artifactType,
+            @NotBlank String storageRef,
+            @NotBlank String contentHash,
+            boolean publicArtifact) {}
 }

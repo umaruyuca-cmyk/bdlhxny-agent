@@ -38,7 +38,11 @@ class CaseControllerTest {
                 8192,
                 json.readTree("{\"expected_tools\":[\"market.get_realtime_quote\"]}"),
                 true,
-                json.readTree("[]"));
+                json.readTree("[]"),
+                json.readTree(
+                        "[{\"variantId\":\"default\",\"contextStrategy\":\"budgeted\","
+                                + "\"tokenBudget\":8192,\"snapshotId\":\"research-01:fixture-v1\","
+                                + "\"snapshotHash\":\"sha256:abc\"}]"));
     }
 
     @Test
@@ -48,7 +52,9 @@ class CaseControllerTest {
         mvc.perform(get("/internal/v1/cases"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].id").value("research-01"))
-                .andExpect(jsonPath("$[0].message").value("宁德时代现在什么价"));
+                .andExpect(jsonPath("$[0].message").value("宁德时代现在什么价"))
+                .andExpect(jsonPath("$[0].variants[0].variantId").value("default"))
+                .andExpect(jsonPath("$[0].variants[0].snapshotId").value("research-01:fixture-v1"));
     }
 
     @Test

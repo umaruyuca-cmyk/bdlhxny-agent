@@ -1,4 +1,4 @@
-"""私有运行 API：固定题号、fail-closed 鉴权和数据服务持久化。"""
+"""私有运行 API:固定题号、fail-closed 鉴权和数据服务持久化。"""
 
 from __future__ import annotations
 
@@ -9,12 +9,20 @@ import pytest
 from fastapi.testclient import TestClient
 
 import bdlh_runtime.run_api as run_api
+from bdlh_runtime.evaluation.run_telemetry import RunRecorder
 
 
 class FakeDataClient:
     def __init__(self) -> None:
         self.created_runs: list[dict[str, Any]] = []
         self.completed: list[str] = []
+        self.saved_events: list[tuple[str, list[dict[str, Any]]]] = []
+        self.saved_model_calls: list[tuple[str, list[dict[str, Any]]]] = []
+        self.saved_tool_calls: list[tuple[str, list[dict[str, Any]]]] = []
+        self.saved_guardrail_checks: list[tuple[str, list[dict[str, Any]]]] = []
+        self.saved_measurements: list[tuple[str, dict[str, Any]]] = []
+        self.saved_artifacts: list[tuple[str, dict[str, Any]]] = []
+        self.evaluations: list[tuple[str, dict[str, Any]]] = []
 
     def list_cases(self) -> list[dict[str, Any]]:
         return [
@@ -30,6 +38,15 @@ class FakeDataClient:
                     "expected_tools": ["market.get_realtime_quote"],
                 },
                 "steps": [],
+                "variants": [
+                    {
+                        "variantId": "default",
+                        "contextStrategy": "budgeted",
+                        "tokenBudget": 8192,
+                        "snapshotId": "research-01:fixture-v1",
+                        "snapshotHash": "sha256:snap",
+                    }
+                ],
             }
         ]
 
@@ -38,6 +55,9 @@ class FakeDataClient:
 
     def get_batch(self, batch_id: str) -> dict[str, Any]:
         return {"id": batch_id, "status": "COMPLETE", "runs": []}
+
+    def get_run_detail(self, run_id: str) -> dict[str, Any]:
+        return {"id": run_id, "events": [], "toolCalls": [], "modelCalls": []}
 
     def verify_session(self, token: str) -> dict[str, Any] | None:
         if token == "test-token":
@@ -52,12 +72,50 @@ class FakeDataClient:
         assert batch_id == "batch-1"
         assert status in {"COMPLETE", "FAILED"}
 
-    def save_evaluation(self, run_id: str, **_: Any) -> None:
-        assert run_id.startswith("run-")
+    def save_events(self, run_id: str, events: list[dict[str, Any]]) -> None:
+        self.saved_events.append((run_id, events))
+
+    def save_model_calls(self, run_id: str, calls: list[dict[str, Any]]) -> None:
+        self.saved_model_calls.append((run_id, calls))
+
+    def save_tool_calls(self, run_id: str, calls: list[dict[str, Any]]) -> None:
+        self.saved_tool_calls.append((run_id, calls))
+
+    def save_guardrail_checks(self, run_id: str, checks: list[dict[str, Any]]) -> None:
+        self.saved_guardrail_checks.append((run_id, checks))
+
+    def save_measurements(self, run_id: str, measurements: dict[str, Any]) -> None:
+        self.saved_measurements.append((run_id, measurements))
+
+    def save_artifact(self, run_id: str, **payload: Any) -> None:
+        self.saved_artifacts.append((run_id, payload))
+
+    def save_evaluation(self, run_id: str, **payload: Any) -> None:
+        self.evaluations.append((run_id, payload))
 
     def complete_run(self, run_id: str, output: dict[str, Any]) -> None:
-        assert "aggregate" in output
+        assert "judgment" in output
         self.completed.append(run_id)
+
+
+def _sample_recorder(agent_mode: str, *, status: str = "COMPLETE", error_category: str | None = None) -> RunRecorder:
+    recorder = RunRecorder(
+        run_key=f"research-01:{agent_mode}:0",
+        case_id="research-01",
+        case_version=1,
+        variant_id="default",
+        snapshot_id="research-01:fixture-v1",
+        snapshot_hash="sha256:snap",
+        agent_mode=agent_mode,
+        context_strategy="fixed-case-input",
+        model="glm-4.7-flash",
+        repeat_index=0,
+        message="宁德时代现在什么价",
+        category="金融研究",
+    )
+    recorder.record_judgment({"tool_correct": True})
+    recorder.complete(status=status, error_category=error_category, error_text="429" if error_category else None)
+    return recorder
 
 
 @pytest.fixture()
@@ -139,6 +197,12 @@ def test_completed_batch_can_be_read_after_job_memory_is_gone(client: TestClient
     assert response.json()["status"] == "COMPLETE"
 
 
+def test_run_detail_proxies_data_service(client: TestClient) -> None:
+    response = client.get("/api/v1/runs/run-9/detail", headers=_auth())
+    assert response.status_code == 200
+    assert response.json()["id"] == "run-9"
+
+
 def test_request_rejects_question_or_tool_fields(client: TestClient) -> None:
     response = client.post(
         "/api/v1/eval-batches",
@@ -148,15 +212,22 @@ def test_request_rejects_question_or_tool_fields(client: TestClient) -> None:
     assert response.status_code == 422
 
 
-def test_batch_persists_each_agent_mode(
+def test_batch_persists_stepwise_records_for_each_mode(
     client: TestClient,
     fake_data: FakeDataClient,
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
 ) -> None:
-    monkeypatch.setattr(
-        run_api,
-        "_execute_eval",
-        lambda _request, _catalog: {
+    """任务一验收:逐运行落库(事件/明细/测量/工件)且 run_id 回填 report。"""
+    monkeypatch.setattr(run_api, "ARTIFACTS_DIR", tmp_path)
+    recorders = [
+        _sample_recorder("baseline-tool-calling"),
+        _sample_recorder("langgraph-react"),
+        _sample_recorder("full-system"),
+    ]
+
+    def fake_execute(_request: Any, _catalog: Any) -> tuple[dict[str, Any], list[Any]]:
+        payload = {
             "cases": [
                 {
                     "id": "research-01",
@@ -165,25 +236,84 @@ def test_batch_persists_each_agent_mode(
                     "treatment": {"tool_correct": 1},
                     "lineage": [],
                 }
-            ]
-        },
-    )
+            ],
+            "run_records": [
+                {"run_key": recorder.record.run_key, "run_id": None} for recorder in recorders
+            ],
+        }
+        return payload, [recorder.record for recorder in recorders]
+
+    monkeypatch.setattr(run_api, "_execute_eval", fake_execute)
     response = client.post(
         "/api/v1/eval-batches",
         json={"case_ids": ["research-01"], "runs": 1},
         headers=_auth(),
     )
     assert response.status_code == 200
-    job_id = response.json()["job_id"]
-
-    job = _poll(client, job_id)
+    job = _poll(client, response.json()["job_id"])
     assert job["status"] == "done"
-    assert [item["agentMode"] for item in fake_data.created_runs] == [
+
+    # 三组各一条运行记录,variant/snapshot 来自 data 服务视图(非拼接)
+    assert [run["agentMode"] for run in fake_data.created_runs] == [
         "baseline-tool-calling",
         "langgraph-react",
         "full-system",
     ]
+    for run in fake_data.created_runs:
+        assert run["variantId"] == "default"
+        assert run["snapshotId"] == "research-01:fixture-v1"
+
+    # 事件流与测量逐运行写入
+    assert len(fake_data.saved_events) == 3
+    assert all(events and events[0]["event_type"] == "run.started" for _run_id, events in fake_data.saved_events)
+    assert len(fake_data.saved_measurements) == 3
+    assert len(fake_data.evaluations) == 3
+    assert all(payload["valid_run"] for _run_id, payload in fake_data.evaluations)
+
+    # 工件文件双写 + run_artifacts 登记 + hash 可复算
+    assert len(fake_data.saved_artifacts) == 3
+    for run_id, artifact_payload in fake_data.saved_artifacts:
+        artifact_file = tmp_path / "runs" / f"{run_id}.json"
+        assert artifact_file.is_file()
+        import json as jsonlib
+
+        artifact = jsonlib.loads(artifact_file.read_text(encoding="utf-8"))
+        assert artifact["artifact_hash"] == artifact_payload["content_hash"]
+        assert artifact["artifact_hash"].startswith("sha256:")
+
+    # run_id 回填进 report
+    assert [row["run_id"] for row in job["report"]["run_records"]] == ["run-1", "run-2", "run-3"]
     assert len(fake_data.completed) == 3
+
+
+def test_invalid_run_is_not_marked_valid(
+    client: TestClient,
+    fake_data: FakeDataClient,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Any,
+) -> None:
+    """429 注入运行:validRun=False、状态 INVALID、工件仍落盘。"""
+    monkeypatch.setattr(run_api, "ARTIFACTS_DIR", tmp_path)
+    recorder = _sample_recorder("baseline-tool-calling", status="INVALID", error_category="RATE_LIMITED")
+
+    def fake_execute(_request: Any, _catalog: Any) -> tuple[dict[str, Any], list[Any]]:
+        return {"cases": [], "run_records": [{"run_key": recorder.record.run_key, "run_id": None}]}, [
+            recorder.record
+        ]
+
+    monkeypatch.setattr(run_api, "_execute_eval", fake_execute)
+    response = client.post(
+        "/api/v1/eval-batches",
+        json={"case_ids": ["research-01"], "runs": 1, "include_react": False},
+        headers=_auth(),
+    )
+    assert response.status_code == 200
+    job = _poll(client, response.json()["job_id"])
+    assert job["status"] == "done"
+    assert fake_data.evaluations[0][1]["valid_run"] is False
+    assert fake_data.evaluations[0][1]["status"] == "INVALID"
+    assert fake_data.saved_artifacts[0][1]["content_hash"].startswith("sha256:")
+    assert (tmp_path / "runs" / "run-1.json").is_file()
 
 
 def test_unknown_case_is_rejected(client: TestClient) -> None:

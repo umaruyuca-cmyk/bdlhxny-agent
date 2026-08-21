@@ -74,6 +74,55 @@ public class RunController {
         return ResponseEntity.accepted().build();
     }
 
+    @PostMapping("/runs/{runId}/model-calls")
+    public ResponseEntity<Void> saveModelCalls(
+            @PathVariable UUID runId,
+            @Valid @RequestBody SaveModelCallsRequest request) {
+        runs.saveModelCalls(runId, request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/runs/{runId}/tool-calls")
+    public ResponseEntity<Void> saveToolCalls(
+            @PathVariable UUID runId,
+            @Valid @RequestBody SaveToolCallsRequest request) {
+        runs.saveToolCalls(runId, request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/runs/{runId}/guardrail-checks")
+    public ResponseEntity<Void> saveGuardrailChecks(
+            @PathVariable UUID runId,
+            @Valid @RequestBody SaveGuardrailChecksRequest request) {
+        runs.saveGuardrailChecks(runId, request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/runs/{runId}/measurements")
+    public ResponseEntity<Void> saveMeasurements(
+            @PathVariable UUID runId,
+            @Valid @RequestBody SaveMeasurementsRequest request) {
+        runs.saveMeasurements(runId, request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @PostMapping("/runs/{runId}/artifacts")
+    public ResponseEntity<Void> saveArtifact(
+            @PathVariable UUID runId,
+            @Valid @RequestBody SaveArtifactRequest request) {
+        runs.saveArtifact(runId, request);
+        return ResponseEntity.accepted().build();
+    }
+
+    @GetMapping("/runs/{runId}/detail")
+    public ResponseEntity<Map<String, Object>> getRunDetail(@PathVariable UUID runId) {
+        try {
+            return ResponseEntity.ok(runs.getRunDetail(runId));
+        } catch (org.springframework.dao.EmptyResultDataAccessException exception) {
+            return ResponseEntity.notFound().build();
+        }
+    }
+
     @PostMapping("/runs/{runId}/evaluation")
     public ResponseEntity<Void> saveEvaluation(
             @PathVariable UUID runId,

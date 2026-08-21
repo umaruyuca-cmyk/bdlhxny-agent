@@ -21,6 +21,14 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from bdlh_runtime.data_client import DataClient, DataServiceError
 from bdlh_runtime.evaluation.ab_eval import _report_payload, load_cases, run_ab_eval
+from bdlh_runtime.evaluation.run_telemetry import (
+    ARTIFACT_VERSION,
+    RunRecord,
+    artifact_hash_of,
+    build_run_artifact,
+    validity_of,
+    verify_artifact_hash,
+)
 
 ARTIFACTS_DIR = Path(os.getenv("ARTIFACTS_DIR", "/app/artifacts"))
 
@@ -187,12 +195,12 @@ def start_eval_batch(
 
     def task() -> None:
         try:
-            report = _execute_eval(request, catalog)
-            _persist_runs(data, batch_id, catalog, request, report)
-            _persist_artifact(batch_id, report)
+            payload, run_records = _execute_eval(request, catalog)
+            _persist_runs(data, batch_id, request, payload, run_records)
+            _persist_artifact(batch_id, payload)
             data.complete_batch(batch_id, "COMPLETE")
             job["status"] = "done"
-            job["report"] = report
+            job["report"] = payload
         except Exception as exc:  # 作业失败进入可见状态，不能让服务进程退出
             with contextlib.suppress(DataServiceError):
                 data.complete_batch(batch_id, "FAILED")
@@ -221,7 +229,18 @@ def get_batch(batch_id: str, account: Annotated[dict[str, Any], Depends(require_
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
-def _execute_eval(request: EvalBatchRequest, catalog: list[dict[str, Any]]) -> dict[str, Any]:
+@app.get("/api/v1/runs/{run_id}/detail")
+def get_run_detail(run_id: str, account: Annotated[dict[str, Any], Depends(require_login)]) -> dict[str, Any]:
+    """单次运行逐步明细:事件流 + 模型/工具/guardrail 明细 + 测量 + 工件登记。"""
+    try:
+        return _data().get_run_detail(run_id)
+    except DataServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _execute_eval(
+    request: EvalBatchRequest, catalog: list[dict[str, Any]]
+) -> tuple[dict[str, Any], list[RunRecord]]:
     async def run() -> Any:
         return await run_ab_eval(
             runs_per_case=request.runs,
@@ -230,45 +249,116 @@ def _execute_eval(request: EvalBatchRequest, catalog: list[dict[str, Any]]) -> d
             cases=load_cases(catalog),
         )
 
-    return _report_payload(asyncio.run(run()))
+    report = asyncio.run(run())
+    return _report_payload(report), report.run_records
 
 
 def _persist_runs(
     data: DataClient,
     batch_id: str,
-    catalog: list[dict[str, Any]],
     request: EvalBatchRequest,
-    report: dict[str, Any],
+    payload: dict[str, Any],
+    run_records: list[RunRecord],
 ) -> None:
-    versions = {str(case["id"]): int(case["version"]) for case in catalog}
-    modes = ["baseline-tool-calling", "full-system"]
-    if request.include_react:
-        modes.insert(1, "langgraph-react")
-    result_keys = {
-        "baseline-tool-calling": "baseline",
-        "langgraph-react": "react",
-        "full-system": "treatment",
-    }
-    for case in report.get("cases", []):
-        case_id = str(case["id"])
-        for mode in modes:
-            aggregate = case.get(result_keys[mode], {})
-            run_id = data.create_run(
-                {
-                    "batchId": batch_id,
-                    "caseId": case_id,
-                    "caseVersion": versions[case_id],
-                    "variantId": "default",
-                    "snapshotId": f"{case_id}:fixture-v1",
-                    "agentMode": mode,
-                    "contextStrategy": "fixed-case-input",
-                    "model": request.model,
-                    "gitCommit": os.getenv("GIT_COMMIT", "unknown"),
-                    "modelConfig": {"runs": request.runs, "toolData": "frozen"},
-                }
-            )
-            data.save_evaluation(run_id, checks=aggregate, metrics=aggregate)
-            data.complete_run(run_id, {"aggregate": aggregate, "lineage": case.get("lineage", [])})
+    """逐运行落库(任务一):事件流、明细表、测量、统一工件与有效性分类。"""
+
+    run_ids: dict[str, str] = {}
+    for record in run_records:
+        run_ids[record.run_key] = _persist_one_run(data, batch_id, request, record)
+    for row in payload.get("run_records", []):
+        run_id = run_ids.get(str(row.get("run_key")))
+        if run_id:
+            row["run_id"] = run_id
+
+
+def _persist_one_run(data: DataClient, batch_id: str, request: EvalBatchRequest, record: RunRecord) -> str:
+    run_id = data.create_run(
+        {
+            "batchId": batch_id,
+            "caseId": record.case_id,
+            "caseVersion": record.case_version,
+            "variantId": record.variant_id,
+            "snapshotId": record.snapshot_id,
+            "agentMode": record.agent_mode,
+            "contextStrategy": record.context_strategy,
+            "model": record.model,
+            "gitCommit": str(record.provenance.get("git_commit") or os.getenv("GIT_COMMIT", "unknown")),
+            "modelConfig": {
+                "runs": request.runs,
+                "toolData": "frozen",
+                "repeatIndex": record.repeat_index,
+            },
+        }
+    )
+    record.run_id = run_id
+    record.batch_id = batch_id
+    if record.events:
+        data.save_events(run_id, record.events)
+    if record.model_calls:
+        data.save_model_calls(run_id, [row.to_payload() for row in record.model_calls])
+    if record.tool_calls:
+        data.save_tool_calls(run_id, [row.to_payload() for row in record.tool_calls])
+    if record.guardrail_checks:
+        data.save_guardrail_checks(run_id, [row.to_payload() for row in record.guardrail_checks])
+    if record.measurements:
+        data.save_measurements(run_id, record.measurements)
+
+    status = record.status
+    error_category = record.error_category
+    artifact = build_run_artifact(record)
+    artifact_error: str | None = None
+    try:
+        storage_ref = _write_run_artifact_file(run_id, artifact)
+    except OSError as exc:
+        # 工件写失败 → INVALID(架构文档 §7.1):过程可查,但不进能力统计
+        status = "INVALID"
+        error_category = "ARTIFACT_WRITE_FAILED"
+        artifact_error = f"{type(exc).__name__}: {exc}"
+        artifact["status"] = status
+        artifact["validity"] = validity_of(status)
+        artifact["result"]["error_category"] = error_category
+        artifact["artifact_hash"] = artifact_hash_of(artifact)
+        storage_ref = ""
+
+    valid_run = validity_of(status) == "VALID"
+    data.save_evaluation(
+        run_id,
+        checks=dict(record.judgment),
+        metrics=dict(record.measurements),
+        valid_run=valid_run,
+        status=status,
+    )
+    if storage_ref and verify_artifact_hash(artifact):
+        data.save_artifact(
+            run_id,
+            artifact_type="run_full",
+            storage_ref=storage_ref,
+            content_hash=str(artifact["artifact_hash"]),
+            public=False,
+        )
+    data.complete_run(
+        run_id,
+        {
+            "answer_excerpt": record.answer_excerpt[:200],
+            "artifact_version": ARTIFACT_VERSION,
+            "artifact_hash": artifact.get("artifact_hash"),
+            "artifact_error": artifact_error,
+            "error_category": error_category,
+            "judgment": record.judgment,
+        },
+    )
+    record.status = status
+    record.error_category = error_category
+    return run_id
+
+
+def _write_run_artifact_file(run_id: str, artifact: dict[str, Any]) -> str:
+    runs_dir = ARTIFACTS_DIR / "runs"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    storage_ref = f"runs/{run_id}.json"
+    content = json.dumps(artifact, ensure_ascii=False, indent=2)
+    (ARTIFACTS_DIR / storage_ref).write_text(content, encoding="utf-8")
+    return storage_ref
 
 
 def _persist_artifact(batch_id: str, payload: dict[str, Any]) -> None:

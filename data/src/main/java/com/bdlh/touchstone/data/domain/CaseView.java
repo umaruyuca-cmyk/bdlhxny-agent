@@ -14,4 +14,5 @@ public record CaseView(
         int tokenBudget,
         JsonNode expectedChecks,
         boolean publicCase,
-        JsonNode steps) {}
+        JsonNode steps,
+        JsonNode variants) {}

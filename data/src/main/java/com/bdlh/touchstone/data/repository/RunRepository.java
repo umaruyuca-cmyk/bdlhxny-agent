@@ -235,6 +235,158 @@ public class RunRepository {
         }
     }
 
+    @Transactional
+    public void saveModelCalls(UUID runId, SaveModelCallsRequest request) {
+        for (ModelCallInput call : request.calls()) {
+            UUID callId = UUID.randomUUID();
+            jdbc.update(
+                    """
+                    INSERT INTO touchstone.model_calls
+                        (id, run_id, sequence, purpose, model, request_hash, response_hash,
+                         input_tokens, output_tokens, duration_ms, retry_count, status, error_category)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    callId,
+                    runId,
+                    call.sequence(),
+                    call.purpose(),
+                    call.model(),
+                    call.requestHash(),
+                    call.responseHash(),
+                    call.inputTokens(),
+                    call.outputTokens(),
+                    call.durationMs(),
+                    call.retryCount(),
+                    call.status(),
+                    call.errorCategory());
+            if (call.messages() == null) {
+                continue;
+            }
+            for (ModelCallMessageInput message : call.messages()) {
+                jdbc.update(
+                        """
+                        INSERT INTO touchstone.model_call_messages
+                            (id, run_id, model_call_id, message_order, role, content,
+                             content_ref, tokens, content_hash)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """,
+                        UUID.randomUUID(),
+                        runId,
+                        callId,
+                        message.messageOrder(),
+                        message.role(),
+                        message.content(),
+                        message.contentRef(),
+                        message.tokens(),
+                        message.contentHash());
+            }
+        }
+    }
+
+    @Transactional
+    public void saveToolCalls(UUID runId, SaveToolCallsRequest request) {
+        for (ToolCallInput call : request.calls()) {
+            jdbc.update(
+                    """
+                    INSERT INTO touchstone.tool_calls
+                        (id, run_id, sequence, tool_name, arguments, arguments_hash, status,
+                         result_summary, result_hash, source_time, duration_ms, audit_code,
+                         fixture_hit, error_category)
+                    VALUES (?, ?, ?, ?, ?::jsonb, ?, ?, ?::jsonb, ?, ?::timestamptz, ?, ?, ?, ?)
+                    """,
+                    UUID.randomUUID(),
+                    runId,
+                    call.sequence(),
+                    call.toolName(),
+                    json(call.arguments()),
+                    call.argumentsHash(),
+                    call.status(),
+                    jsonOrEmpty(call.resultSummary()),
+                    call.resultHash(),
+                    call.sourceTime(),
+                    call.durationMs(),
+                    call.auditCode(),
+                    call.fixtureHit(),
+                    call.errorCategory());
+        }
+    }
+
+    @Transactional
+    public void saveGuardrailChecks(UUID runId, SaveGuardrailChecksRequest request) {
+        for (GuardrailCheckInput check : request.checks()) {
+            jdbc.update(
+                    """
+                    INSERT INTO touchstone.guardrail_checks
+                        (id, run_id, sequence, stage, decision, audit_code, rule_ids,
+                         reasons, tool_name, detail, duration_ms)
+                    VALUES (?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, ?, ?::jsonb, ?)
+                    """,
+                    UUID.randomUUID(),
+                    runId,
+                    check.sequence(),
+                    check.stage(),
+                    check.decision(),
+                    check.auditCode(),
+                    jsonOr(check.ruleIds(), "[]"),
+                    jsonOr(check.reasons(), "[]"),
+                    check.toolName(),
+                    jsonOr(check.detail(), "{}"),
+                    check.durationMs());
+        }
+    }
+
+    public void saveMeasurements(UUID runId, SaveMeasurementsRequest m) {
+        jdbc.update(
+                """
+                INSERT INTO touchstone.run_measurements
+                    (run_id, queue_ms, snapshot_ms, context_collect_ms, context_compress_ms,
+                     tool_loading_ms, llm_ms, tool_ms, guardrail_ms, judgment_ms,
+                     first_output_ms, total_duration_ms, prompt_tokens, cached_prompt_tokens,
+                     completion_tokens, compression_input_tokens, compression_output_tokens)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (run_id) DO UPDATE SET
+                    queue_ms = EXCLUDED.queue_ms,
+                    snapshot_ms = EXCLUDED.snapshot_ms,
+                    context_collect_ms = EXCLUDED.context_collect_ms,
+                    context_compress_ms = EXCLUDED.context_compress_ms,
+                    tool_loading_ms = EXCLUDED.tool_loading_ms,
+                    llm_ms = EXCLUDED.llm_ms,
+                    tool_ms = EXCLUDED.tool_ms,
+                    guardrail_ms = EXCLUDED.guardrail_ms,
+                    judgment_ms = EXCLUDED.judgment_ms,
+                    first_output_ms = EXCLUDED.first_output_ms,
+                    total_duration_ms = EXCLUDED.total_duration_ms,
+                    prompt_tokens = EXCLUDED.prompt_tokens,
+                    cached_prompt_tokens = EXCLUDED.cached_prompt_tokens,
+                    completion_tokens = EXCLUDED.completion_tokens,
+                    compression_input_tokens = EXCLUDED.compression_input_tokens,
+                    compression_output_tokens = EXCLUDED.compression_output_tokens
+                """,
+                runId, m.queueMs(), m.snapshotMs(), m.contextCollectMs(), m.contextCompressMs(),
+                m.toolLoadingMs(), m.llmMs(), m.toolMs(), m.guardrailMs(), m.judgmentMs(),
+                m.firstOutputMs(), m.totalDurationMs(), m.promptTokens(), m.cachedPromptTokens(),
+                m.completionTokens(), m.compressionInputTokens(), m.compressionOutputTokens());
+    }
+
+    public void saveArtifact(UUID runId, SaveArtifactRequest request) {
+        jdbc.update(
+                """
+                INSERT INTO touchstone.run_artifacts
+                    (id, run_id, artifact_type, storage_ref, content_hash, public)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT (run_id, artifact_type) DO UPDATE SET
+                    storage_ref = EXCLUDED.storage_ref,
+                    content_hash = EXCLUDED.content_hash,
+                    public = EXCLUDED.public
+                """,
+                UUID.randomUUID(),
+                runId,
+                request.artifactType(),
+                request.storageRef(),
+                request.contentHash(),
+                request.publicArtifact());
+    }
+
     public void saveEvaluation(UUID runId, SaveEvaluationRequest request) {
         jdbc.update(
                 """
@@ -300,6 +452,67 @@ public class RunRepository {
         return run;
     }
 
+    /** /lab 运行详情:事件流 + 模型/工具/guardrail 明细 + 测量 + 工件登记。 */
+    public Map<String, Object> getRunDetail(UUID runId) {
+        Map<String, Object> run = getRun(runId);
+        run.put("events", jdbc.queryForList(
+                """
+                SELECT sequence, event_type, payload::text AS payload, occurred_at
+                FROM touchstone.run_events WHERE run_id = ? ORDER BY sequence
+                """,
+                runId));
+        List<Map<String, Object>> calls = jdbc.queryForList(
+                """
+                SELECT id, sequence, purpose, model, request_hash, response_hash,
+                       input_tokens, output_tokens, duration_ms, retry_count,
+                       status, error_category
+                FROM touchstone.model_calls WHERE run_id = ? ORDER BY sequence
+                """,
+                runId);
+        for (Map<String, Object> call : calls) {
+            call.put("messages", jdbc.queryForList(
+                    """
+                    SELECT message_order, role, content, content_ref, tokens, content_hash
+                    FROM touchstone.model_call_messages
+                    WHERE model_call_id = ? ORDER BY message_order
+                    """,
+                    call.get("id")));
+        }
+        run.put("modelCalls", calls);
+        run.put("toolCalls", jdbc.queryForList(
+                """
+                SELECT sequence, tool_name, arguments::text AS arguments, arguments_hash,
+                       status, result_summary::text AS result_summary, result_hash,
+                       source_time, duration_ms, audit_code, fixture_hit, error_category
+                FROM touchstone.tool_calls WHERE run_id = ? ORDER BY sequence
+                """,
+                runId));
+        run.put("guardrailChecks", jdbc.queryForList(
+                """
+                SELECT sequence, stage, decision, audit_code, rule_ids::text AS rule_ids,
+                       reasons::text AS reasons, tool_name, detail::text AS detail, duration_ms
+                FROM touchstone.guardrail_checks WHERE run_id = ? ORDER BY sequence
+                """,
+                runId));
+        run.put("measurements", jdbc.queryForList(
+                """
+                SELECT queue_ms, snapshot_ms, context_collect_ms, context_compress_ms,
+                       tool_loading_ms, llm_ms, tool_ms, guardrail_ms, judgment_ms,
+                       first_output_ms, total_duration_ms, prompt_tokens,
+                       cached_prompt_tokens, completion_tokens,
+                       compression_input_tokens, compression_output_tokens
+                FROM touchstone.run_measurements WHERE run_id = ?
+                """,
+                runId));
+        run.put("artifacts", jdbc.queryForList(
+                """
+                SELECT artifact_type, storage_ref, content_hash, "public", created_at
+                FROM touchstone.run_artifacts WHERE run_id = ?
+                """,
+                runId));
+        return run;
+    }
+
     private String json(JsonNode node) {
         try {
             return objectMapper.writeValueAsString(node);
@@ -314,5 +527,9 @@ public class RunRepository {
 
     private String jsonOrNull(JsonNode node) {
         return node == null ? "null" : json(node);
+    }
+
+    private String jsonOr(JsonNode node, String fallback) {
+        return node == null ? fallback : json(node);
     }
 }

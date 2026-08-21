@@ -68,19 +68,101 @@ class DataClient:
             expect_json=False,
         )
 
-    def save_evaluation(self, run_id: str, *, checks: dict[str, Any], metrics: dict[str, Any]) -> None:
+    def save_evaluation(
+        self,
+        run_id: str,
+        *,
+        checks: dict[str, Any],
+        metrics: dict[str, Any],
+        valid_run: bool,
+        status: str = "COMPLETE",
+        evaluator_version: str = "fixed-rules-v1",
+    ) -> None:
         self._request(
             "POST",
             f"/runs/{run_id}/evaluation",
             json={
-                "evaluatorVersion": "fixed-rules-v1",
-                "validRun": True,
-                "status": "COMPLETE",
+                "evaluatorVersion": evaluator_version,
+                "validRun": valid_run,
+                "status": status,
                 "checks": checks,
                 "metrics": metrics,
             },
             expect_json=False,
         )
+
+    def save_events(self, run_id: str, events: list[dict[str, Any]]) -> None:
+        """运行事件流(run_events):九类事件,sequence 单调递增。"""
+        self._request(
+            "POST",
+            f"/runs/{run_id}/events",
+            json={"events": events},
+            expect_json=False,
+        )
+
+    def save_model_calls(self, run_id: str, calls: list[dict[str, Any]]) -> None:
+        """模型调用明细(model_calls + model_call_messages 消息快照)。"""
+        self._request(
+            "POST",
+            f"/runs/{run_id}/model-calls",
+            json={"calls": calls},
+            expect_json=False,
+        )
+
+    def save_tool_calls(self, run_id: str, calls: list[dict[str, Any]]) -> None:
+        """工具调用明细(tool_calls):成功/失败/被拦截(DENIED)。"""
+        self._request(
+            "POST",
+            f"/runs/{run_id}/tool-calls",
+            json={"calls": calls},
+            expect_json=False,
+        )
+
+    def save_guardrail_checks(self, run_id: str, checks: list[dict[str, Any]]) -> None:
+        """治理检查明细(guardrail_checks):四时点拦截记录。"""
+        self._request(
+            "POST",
+            f"/runs/{run_id}/guardrail-checks",
+            json={"checks": checks},
+            expect_json=False,
+        )
+
+    def save_measurements(self, run_id: str, measurements: dict[str, Any]) -> None:
+        """分阶段耗时与 token 汇总(run_measurements)。"""
+        self._request(
+            "POST",
+            f"/runs/{run_id}/measurements",
+            json=measurements,
+            expect_json=False,
+        )
+
+    def save_artifact(
+        self,
+        run_id: str,
+        *,
+        artifact_type: str,
+        storage_ref: str,
+        content_hash: str,
+        public: bool = False,
+    ) -> None:
+        """统一工件登记(run_artifacts):与 ARTIFACTS_DIR 文件双写。"""
+        self._request(
+            "POST",
+            f"/runs/{run_id}/artifacts",
+            json={
+                "artifactType": artifact_type,
+                "storageRef": storage_ref,
+                "contentHash": content_hash,
+                "publicArtifact": public,
+            },
+            expect_json=False,
+        )
+
+    def get_run_detail(self, run_id: str) -> dict[str, Any]:
+        payload = self._request("GET", f"/runs/{run_id}/detail")
+        if not isinstance(payload, dict):
+            raise DataServiceError("data service returned an invalid run detail")
+        return payload
 
     def complete_run(self, run_id: str, output: dict[str, Any]) -> None:
         self._request(
