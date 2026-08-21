@@ -18,6 +18,7 @@ import argparse
 import asyncio
 import json
 import os
+import random
 import statistics
 import sys
 import time
@@ -62,6 +63,11 @@ from bdlh_runtime.registry import load_and_validate_payload
 from bdlh_runtime.tools.catalog import ToolCatalog, catalog_from_snapshot
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
+
+#: 交错运行默认种子(确定性可复现;CLI/接口可覆盖)
+DEFAULT_INTERLEAVE_SEED = 20260821
+#: 每组最小 VALID 样本门槛(任务三);环境变量 EVAL_MIN_VALID_SAMPLES 可覆盖
+DEFAULT_MIN_VALID_SAMPLES = 5
 
 
 # ── 固定用例（唯一真源：data 服务 → PostgreSQL seed）──────────────────
@@ -259,6 +265,35 @@ class ABReport:
     model: str = "glm-4.7"
     executor: str = "frozen"
     run_records: list[RunRecord] = field(default_factory=list)
+    # 有效样本门槛(任务三):每组 VALID 运行数 ≥ min_valid_samples 才可认定正式批次
+    min_valid_samples: int = DEFAULT_MIN_VALID_SAMPLES
+    validity_threshold: dict[str, Any] = field(default_factory=dict)
+
+
+def evaluate_validity_threshold(
+    baseline: GroupSummary,
+    treatment: GroupSummary,
+    react: GroupSummary | None,
+    *,
+    min_valid: int,
+) -> dict[str, Any]:
+    """批次级有效样本门槛判定(任务三):任一组 VALID 数不足即未达门槛。
+
+    未达门槛的批次可运行、可查看,但不可认定正式(任务五消费本判定)。
+    """
+
+    groups: dict[str, GroupSummary] = {"baseline": baseline, "treatment": treatment}
+    if react is not None:
+        groups["react"] = react
+    detail = {
+        name: {"required": min_valid, "valid": group.valid_runs, "met": group.valid_runs >= min_valid}
+        for name, group in groups.items()
+    }
+    return {
+        "min_valid_per_group": min_valid,
+        "groups": detail,
+        "met": all(row["met"] for row in detail.values()),
+    }
 
 
 # ── 运行函数 ────────────────────────────────────────────────────────────
@@ -563,8 +598,13 @@ async def run_ab_eval(
     frozen: FrozenObservations | None = None,
     retry_delay_s: float = 30.0,
     inter_run_delay_s: float = 1.0,
+    interleave_seed: int = DEFAULT_INTERLEAVE_SEED,
+    min_valid_samples: int | None = None,
 ) -> ABReport:
-    """跑一轮对照批次;每次执行(case × mode × repeat)产出完整 RunRecord。"""
+    """跑一轮对照批次;每次执行(case × mode × repeat)产出完整 RunRecord。
+
+    交错运行:题序按 repeat 轮转、三组顺序按 ``interleave_seed`` 确定性洗牌。
+    """
 
     if not cases:
         raise ValueError("cases 为空：固定用例必须由调用方通过 load_cases 从 data 服务加载")
@@ -618,11 +658,15 @@ async def run_ab_eval(
         return bool(error) and "429" in str(error)
 
     run_records: list[RunRecord] = []
-    case_reports: list[CaseReport] = []
-    for case in selected:
-        cr = CaseReport(case_id=case.id, category=case.category, message=case.message)
-        for repeat_index in range(runs_per_case):
-            # Baseline (with 429 retry)
+    case_reports = {
+        case.id: CaseReport(case_id=case.id, category=case.category, message=case.message) for case in selected
+    }
+    rng = random.Random(interleave_seed)
+    group_modes = [MODE_BASELINE, MODE_REACT, MODE_TREATMENT] if with_react else [MODE_BASELINE, MODE_TREATMENT]
+
+    async def run_group(mode: str, case: ABCase, repeat_index: int) -> None:
+        cr = case_reports[case.id]
+        if mode == MODE_BASELINE:
             b_started = time.perf_counter()
             b_recorder: RunRecorder | None = None
             b_result: BaselineResult | None = None
@@ -650,105 +694,116 @@ async def run_ab_eval(
             cr.baseline_runs.append(b_judgment)
             cr.baseline_answers.append((b_result.answer or "")[:200])
             run_records.append(b_recorder.record)
-            await asyncio.sleep(inter_run_delay_s)
+            return
+        if mode == MODE_REACT:
+            r_started = time.perf_counter()
+            r_recorder: RunRecorder | None = None
+            r_result: BaselineResult | None = None
+            r_exec: Any = None
+            for attempt in range(_RETRY_ATTEMPTS):
+                r_recorder = new_recorder(case, MODE_REACT, repeat_index)
+                r_exec = RecordingExecutor(build_executor(), r_recorder)
+                r_result = await react_official_run(
+                    message=case.message,
+                    history=list(case.history),
+                    all_cards=all_cards,
+                    llm=RecordingLLM(llm, r_recorder, model),
+                    executor=r_exec,
+                    system_prompt=BASELINE_SYSTEM,
+                )
+                if is_rate_limited(r_result.error) and attempt < _RETRY_ATTEMPTS - 1:
+                    print(f"    react 429, retry in {retry_delay_s:.0f}s ({attempt + 1}/{_RETRY_ATTEMPTS})")
+                    await asyncio.sleep(retry_delay_s)
+                    continue
+                break
+            r_recorder.mark_judgment_started()
+            r_judgment = _judge_react(case, r_result, r_exec, catalog_names)
+            r_judgment.duration_ms = round((time.perf_counter() - r_started) * 1000)
+            _finalize_run(r_recorder, r_judgment, answer=r_result.answer or "", prompt_hash=baseline_prompt_hash)
+            cr.react_runs.append(r_judgment)
+            cr.react_answers.append((r_result.answer or "")[:200])
+            run_records.append(r_recorder.record)
+            return
 
-            # LangGraph 官方 ReAct 对照组（可选；带 429 重试）
-            if with_react:
-                r_started = time.perf_counter()
-                r_recorder: RunRecorder | None = None
-                r_result: BaselineResult | None = None
-                r_exec: Any = None
-                for attempt in range(_RETRY_ATTEMPTS):
-                    r_recorder = new_recorder(case, MODE_REACT, repeat_index)
-                    r_exec = RecordingExecutor(build_executor(), r_recorder)
-                    r_result = await react_official_run(
-                        message=case.message,
-                        history=list(case.history),
-                        all_cards=all_cards,
-                        llm=RecordingLLM(llm, r_recorder, model),
-                        executor=r_exec,
-                        system_prompt=BASELINE_SYSTEM,
-                    )
-                    if is_rate_limited(r_result.error) and attempt < _RETRY_ATTEMPTS - 1:
-                        print(f"    react 429, retry in {retry_delay_s:.0f}s ({attempt + 1}/{_RETRY_ATTEMPTS})")
-                        await asyncio.sleep(retry_delay_s)
-                        continue
-                    break
-                r_recorder.mark_judgment_started()
-                r_judgment = _judge_react(case, r_result, r_exec, catalog_names)
-                r_judgment.duration_ms = round((time.perf_counter() - r_started) * 1000)
-                _finalize_run(r_recorder, r_judgment, answer=r_result.answer or "", prompt_hash=baseline_prompt_hash)
-                cr.react_runs.append(r_judgment)
-                cr.react_answers.append((r_result.answer or "")[:200])
-                run_records.append(r_recorder.record)
+        # Treatment (with 429 retry)
+        t_started = time.perf_counter()
+        t_recorder: RunRecorder | None = None
+        t_result: AgentResult | None = None
+        t_exec: Any = None
+        t_error: str | None = None
+        for attempt in range(_RETRY_ATTEMPTS):
+            t_recorder = new_recorder(case, MODE_TREATMENT, repeat_index, emit_context=False)
+            t_exec = RecordingExecutor(build_executor(), t_recorder)
+            try:
+                t_result, _inner_exec, _loop = await run_treatment(
+                    case, RecordingLLM(llm, t_recorder, model), catalog, t_exec
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 —— 异常降级为一次运行,不中断批次
+                if "429" in str(exc) and attempt < _RETRY_ATTEMPTS - 1:
+                    print(f"    treatment 429, retry in {retry_delay_s:.0f}s ({attempt + 1}/{_RETRY_ATTEMPTS})")
+                    await asyncio.sleep(retry_delay_s)
+                    continue
+                t_error = str(exc)
+                break
+        t_recorder.mark_judgment_started()
+        if t_result is None:
+            t_recorder.record_context(
+                {
+                    "strategy": "fixed-case-input",
+                    "status": "FAILED",
+                    "note": "运行失败,循环内构建报告不可得",
+                    "tokenizerVersion": TOKENIZER_VERSION,
+                }
+            )
+            t_judgment = RunJudgment(
+                error=t_error or "treatment 运行失败",
+                duration_ms=round((time.perf_counter() - t_started) * 1000),
+            )
+            _finalize_run(t_recorder, t_judgment, answer="", prompt_hash=treatment_prompt_hash)
+            cr.treatment_runs.append(t_judgment)
+            cr.treatment_answers.append(f"（失败：{t_error}）")
+        else:
+            _attach_context_build(t_recorder, t_result)
+            record_treatment_audits(t_recorder, t_result.audits, t_result.observations)
+            t_guard = guardrail.check(t_result.answer, t_result.observations)
+            record_output_guardrail(t_recorder, t_guard)
+            t_judgment = _judge_treatment(case, t_result, t_guard, t_exec, catalog_names)
+            t_judgment.duration_ms = round((time.perf_counter() - t_started) * 1000)
+            _finalize_run(
+                t_recorder,
+                t_judgment,
+                answer=t_guard.fixed_answer,
+                prompt_hash=treatment_prompt_hash,
+                audit_codes=t_guard.audit_codes,
+            )
+            cr.treatment_runs.append(t_judgment)
+            cr.treatment_answers.append(t_guard.fixed_answer[:200])
+            cr.lineage = [
+                {
+                    "tool": tool_name,
+                    "store": "frozen-fixture",
+                    "query": args,
+                    "result": _lineage_digest(result),
+                }
+                for tool_name, args, result in t_exec.results
+            ]
+        run_records.append(t_recorder.record)
+
+    # 交错运行(任务三):题序按 repeat 轮转、三组顺序按确定性种子洗牌,
+    # 避免先跑组总是遇到更好的服务状态;同一种子可完整复现执行序
+    for repeat_index in range(runs_per_case):
+        offset = repeat_index % len(selected)
+        rotated = selected[offset:] + selected[:offset] if offset else list(selected)
+        for case in rotated:
+            order = list(group_modes)
+            rng.shuffle(order)
+            for mode in order:
+                await run_group(mode, case, repeat_index)
                 await asyncio.sleep(inter_run_delay_s)
 
-            # Treatment (with 429 retry)
-            t_started = time.perf_counter()
-            t_recorder: RunRecorder | None = None
-            t_result: AgentResult | None = None
-            t_exec: Any = None
-            t_error: str | None = None
-            for attempt in range(_RETRY_ATTEMPTS):
-                t_recorder = new_recorder(case, MODE_TREATMENT, repeat_index, emit_context=False)
-                t_exec = RecordingExecutor(build_executor(), t_recorder)
-                try:
-                    t_result, _inner_exec, _loop = await run_treatment(
-                        case, RecordingLLM(llm, t_recorder, model), catalog, t_exec
-                    )
-                    break
-                except Exception as exc:  # noqa: BLE001 —— 异常降级为一次运行,不中断批次
-                    if "429" in str(exc) and attempt < _RETRY_ATTEMPTS - 1:
-                        print(f"    treatment 429, retry in {retry_delay_s:.0f}s ({attempt + 1}/{_RETRY_ATTEMPTS})")
-                        await asyncio.sleep(retry_delay_s)
-                        continue
-                    t_error = str(exc)
-                    break
-            t_recorder.mark_judgment_started()
-            if t_result is None:
-                t_recorder.record_context(
-                    {
-                        "strategy": "fixed-case-input",
-                        "status": "FAILED",
-                        "note": "运行失败,循环内构建报告不可得",
-                        "tokenizerVersion": TOKENIZER_VERSION,
-                    }
-                )
-                t_judgment = RunJudgment(
-                    error=t_error or "treatment 运行失败",
-                    duration_ms=round((time.perf_counter() - t_started) * 1000),
-                )
-                _finalize_run(t_recorder, t_judgment, answer="", prompt_hash=treatment_prompt_hash)
-                cr.treatment_runs.append(t_judgment)
-                cr.treatment_answers.append(f"（失败：{t_error}）")
-            else:
-                _attach_context_build(t_recorder, t_result)
-                record_treatment_audits(t_recorder, t_result.audits, t_result.observations)
-                t_guard = guardrail.check(t_result.answer, t_result.observations)
-                record_output_guardrail(t_recorder, t_guard)
-                t_judgment = _judge_treatment(case, t_result, t_guard, t_exec, catalog_names)
-                t_judgment.duration_ms = round((time.perf_counter() - t_started) * 1000)
-                _finalize_run(
-                    t_recorder,
-                    t_judgment,
-                    answer=t_guard.fixed_answer,
-                    prompt_hash=treatment_prompt_hash,
-                    audit_codes=t_guard.audit_codes,
-                )
-                cr.treatment_runs.append(t_judgment)
-                cr.treatment_answers.append(t_guard.fixed_answer[:200])
-                cr.lineage = [
-                    {
-                        "tool": tool_name,
-                        "store": "frozen-fixture",
-                        "query": args,
-                        "result": _lineage_digest(result),
-                    }
-                    for tool_name, args, result in t_exec.results
-                ]
-            run_records.append(t_recorder.record)
-            await asyncio.sleep(inter_run_delay_s)
-
+    case_reports_ordered = [case_reports[case.id] for case in selected]
+    for cr in case_reports_ordered:
         react_part = ""
         if with_react:
             react_part = f" 官方ReAct={sum(1 for r in cr.react_runs if r.tool_correct)}/{runs_per_case}"
@@ -758,21 +813,32 @@ async def run_ab_eval(
             f"{react_part} "
             f"完整模式={sum(1 for r in cr.treatment_runs if r.tool_correct)}/{runs_per_case}"
         )
-        case_reports.append(cr)
 
-    all_baseline = [j for cr in case_reports for j in cr.baseline_runs]
-    all_treatment = [j for cr in case_reports for j in cr.treatment_runs]
-    all_react = [j for cr in case_reports for j in cr.react_runs] if with_react else None
+    all_baseline = [j for cr in case_reports_ordered for j in cr.baseline_runs]
+    all_treatment = [j for cr in case_reports_ordered for j in cr.treatment_runs]
+    all_react = [j for cr in case_reports_ordered for j in cr.react_runs] if with_react else None
+    baseline_summary = _summarize(all_baseline)
+    treatment_summary = _summarize(all_treatment)
+    react_summary = _summarize(all_react) if all_react else None
+    resolved_min_valid = (
+        min_valid_samples
+        if min_valid_samples is not None
+        else int(os.getenv("EVAL_MIN_VALID_SAMPLES", str(DEFAULT_MIN_VALID_SAMPLES)))
+    )
     return ABReport(
         case_count=len(selected),
         runs_per_case=runs_per_case,
-        baseline=_summarize(all_baseline),
-        treatment=_summarize(all_treatment),
-        react=_summarize(all_react) if all_react else None,
-        cases=case_reports,
+        baseline=baseline_summary,
+        treatment=treatment_summary,
+        react=react_summary,
+        cases=case_reports_ordered,
         model=model,
         executor="frozen",
         run_records=run_records,
+        min_valid_samples=resolved_min_valid,
+        validity_threshold=evaluate_validity_threshold(
+            baseline_summary, treatment_summary, react_summary, min_valid=resolved_min_valid
+        ),
     )
 
 
@@ -787,6 +853,13 @@ def _pp(rate: float) -> str:
     delta = rate * 100
     sign = "+" if delta >= 0 else ""
     return f"{sign}{delta:.0f}pp"
+
+
+def _pp_guarded(baseline_rate: float, treatment_rate: float) -> str:
+    """变化列口径(任务三):0%→0% 不渲染为改善/回归(无有效样本不构成结论)。"""
+    if baseline_rate == 0 and treatment_rate == 0:
+        return "—"
+    return _pp(treatment_rate - baseline_rate)
 
 
 def _token_pct(baseline: int, treatment: int) -> str:
@@ -840,6 +913,34 @@ def render_markdown(report: ABReport) -> str:
         lines.extend(invalid_rows)
     lines += [
         "",
+        "## 样本口径(总运行 / 有效 / 无效三分)",
+        "",
+        "| 组 | 总运行 | 有效 | 无效 | 无效原因 |",
+        "|---|---:|---:|---:|---|",
+    ]
+
+    def _reason_cell(group: GroupSummary) -> str:
+        if not group.invalid_reasons:
+            return "—"
+        return ", ".join(f"{key}×{count}" for key, count in sorted(group.invalid_reasons.items()))
+
+    sample_rows = [("裸调用", b), ("完整模式", t)]
+    if has_react:
+        sample_rows.insert(1, ("官方ReAct", r))
+    for label, group in sample_rows:
+        lines.append(
+            f"| {label} | {group.total_runs} | {group.valid_runs} | {group.invalid_runs} | {_reason_cell(group)} |"
+        )
+    threshold = report.validity_threshold or {}
+    if threshold:
+        verdict = "满足" if threshold.get("met") else "未满足"
+        lines.append("")
+        lines.append(
+            f"**有效样本门槛**:每组 ≥ {threshold.get('min_valid_per_group', report.min_valid_samples)} 个 VALID"
+            f"——本批次**{verdict}**(未达门槛可查看但不可认定正式批次)"
+        )
+    lines += [
+        "",
         "## 总表",
         "",
     ]
@@ -847,12 +948,12 @@ def render_markdown(report: ABReport) -> str:
         lines += [
             "| 指标 | 裸 tool calling | LangGraph 官方 ReAct | 完整工程模式 | 变化(完整−基线) |",
             "|---|---:|---:|---:|---:|",
-            f"| 工具选择准确率 | {_pct(b.tool_selection_rate)} | {_pct(r.tool_selection_rate)} | {_pct(t.tool_selection_rate)} | {_pp(t.tool_selection_rate - b.tool_selection_rate)} |",
-            f"| 幻觉工具率 | {_pct(b.hallucination_rate)} | {_pct(r.hallucination_rate)} | {_pct(t.hallucination_rate)} | {_pp(t.hallucination_rate - b.hallucination_rate)} |",
-            f"| 越权泄漏率 | {_pct(b.forbidden_leak_rate)} | {_pct(r.forbidden_leak_rate)} | {_pct(t.forbidden_leak_rate)} | {_pp(t.forbidden_leak_rate - b.forbidden_leak_rate)} |",
-            f"| 数字幻觉率 | {_pct(b.number_hallucination_rate)} | {_pct(r.number_hallucination_rate)} | {_pct(t.number_hallucination_rate)} | {_pp(t.number_hallucination_rate - b.number_hallucination_rate)} |",
-            f"| 合规违规率(C-1) | {_pct(b.c1_violation_rate)} | {_pct(r.c1_violation_rate)} | {_pct(t.c1_violation_rate)} | {_pp(t.c1_violation_rate - b.c1_violation_rate)} |",
-            f"| 合规违规率(C-2) | {_pct(b.c2_violation_rate)} | {_pct(r.c2_violation_rate)} | {_pct(t.c2_violation_rate)} | {_pp(t.c2_violation_rate - b.c2_violation_rate)} |",
+            f"| 工具选择准确率 | {_pct(b.tool_selection_rate)} | {_pct(r.tool_selection_rate)} | {_pct(t.tool_selection_rate)} | {_pp_guarded(b.tool_selection_rate, t.tool_selection_rate)} |",
+            f"| 幻觉工具率 | {_pct(b.hallucination_rate)} | {_pct(r.hallucination_rate)} | {_pct(t.hallucination_rate)} | {_pp_guarded(b.hallucination_rate, t.hallucination_rate)} |",
+            f"| 越权泄漏率 | {_pct(b.forbidden_leak_rate)} | {_pct(r.forbidden_leak_rate)} | {_pct(t.forbidden_leak_rate)} | {_pp_guarded(b.forbidden_leak_rate, t.forbidden_leak_rate)} |",
+            f"| 数字幻觉率 | {_pct(b.number_hallucination_rate)} | {_pct(r.number_hallucination_rate)} | {_pct(t.number_hallucination_rate)} | {_pp_guarded(b.number_hallucination_rate, t.number_hallucination_rate)} |",
+            f"| 合规违规率(C-1) | {_pct(b.c1_violation_rate)} | {_pct(r.c1_violation_rate)} | {_pct(t.c1_violation_rate)} | {_pp_guarded(b.c1_violation_rate, t.c1_violation_rate)} |",
+            f"| 合规违规率(C-2) | {_pct(b.c2_violation_rate)} | {_pct(r.c2_violation_rate)} | {_pct(t.c2_violation_rate)} | {_pp_guarded(b.c2_violation_rate, t.c2_violation_rate)} |",
             f"| 平均轮次 | {b.mean_rounds:.1f} | {r.mean_rounds:.1f} | {t.mean_rounds:.1f} | {t.mean_rounds - b.mean_rounds:+.1f} |",
             f"| 平均 token | {b.mean_tokens} | {r.mean_tokens} | {t.mean_tokens} | {_token_pct(b.mean_tokens, t.mean_tokens)} |",
         ]
@@ -860,12 +961,12 @@ def render_markdown(report: ABReport) -> str:
         lines += [
             "| 指标 | 裸 tool calling | 完整工程模式 | 变化(完整−基线) |",
             "|---|---:|---:|---:|",
-            f"| 工具选择准确率 | {_pct(b.tool_selection_rate)} | {_pct(t.tool_selection_rate)} | {_pp(t.tool_selection_rate - b.tool_selection_rate)} |",
-            f"| 幻觉工具率 | {_pct(b.hallucination_rate)} | {_pct(t.hallucination_rate)} | {_pp(t.hallucination_rate - b.hallucination_rate)} |",
-            f"| 越权泄漏率 | {_pct(b.forbidden_leak_rate)} | {_pct(t.forbidden_leak_rate)} | {_pp(t.forbidden_leak_rate - b.forbidden_leak_rate)} |",
-            f"| 数字幻觉率 | {_pct(b.number_hallucination_rate)} | {_pct(t.number_hallucination_rate)} | {_pp(t.number_hallucination_rate - b.number_hallucination_rate)} |",
-            f"| 合规违规率(C-1) | {_pct(b.c1_violation_rate)} | {_pct(t.c1_violation_rate)} | {_pp(t.c1_violation_rate - b.c1_violation_rate)} |",
-            f"| 合规违规率(C-2) | {_pct(b.c2_violation_rate)} | {_pct(t.c2_violation_rate)} | {_pp(t.c2_violation_rate - b.c2_violation_rate)} |",
+            f"| 工具选择准确率 | {_pct(b.tool_selection_rate)} | {_pct(t.tool_selection_rate)} | {_pp_guarded(b.tool_selection_rate, t.tool_selection_rate)} |",
+            f"| 幻觉工具率 | {_pct(b.hallucination_rate)} | {_pct(t.hallucination_rate)} | {_pp_guarded(b.hallucination_rate, t.hallucination_rate)} |",
+            f"| 越权泄漏率 | {_pct(b.forbidden_leak_rate)} | {_pct(t.forbidden_leak_rate)} | {_pp_guarded(b.forbidden_leak_rate, t.forbidden_leak_rate)} |",
+            f"| 数字幻觉率 | {_pct(b.number_hallucination_rate)} | {_pct(t.number_hallucination_rate)} | {_pp_guarded(b.number_hallucination_rate, t.number_hallucination_rate)} |",
+            f"| 合规违规率(C-1) | {_pct(b.c1_violation_rate)} | {_pct(t.c1_violation_rate)} | {_pp_guarded(b.c1_violation_rate, t.c1_violation_rate)} |",
+            f"| 合规违规率(C-2) | {_pct(b.c2_violation_rate)} | {_pct(t.c2_violation_rate)} | {_pp_guarded(b.c2_violation_rate, t.c2_violation_rate)} |",
             f"| 平均轮次 | {b.mean_rounds:.1f} | {t.mean_rounds:.1f} | {t.mean_rounds - b.mean_rounds:+.1f} |",
             f"| 平均 token | {b.mean_tokens} | {t.mean_tokens} | {_token_pct(b.mean_tokens, t.mean_tokens)} |",
         ]
@@ -1041,6 +1142,8 @@ def _report_payload(report: ABReport) -> dict[str, Any]:
         "case_count": report.case_count,
         "groups": groups,
         "cases": cases,
+        "validity_threshold": report.validity_threshold,
+        "min_valid_samples": report.min_valid_samples,
         "run_records": [
             {
                 "run_key": record.run_key,

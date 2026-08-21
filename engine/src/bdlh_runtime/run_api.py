@@ -20,7 +20,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from bdlh_runtime.data_client import DataClient, DataServiceError
-from bdlh_runtime.evaluation.ab_eval import _report_payload, load_cases, run_ab_eval
+from bdlh_runtime.evaluation.ab_eval import DEFAULT_INTERLEAVE_SEED, _report_payload, load_cases, run_ab_eval
 from bdlh_runtime.evaluation.context_eval import COMPARISON_VARIANTS
 from bdlh_runtime.evaluation.run_telemetry import (
     ARTIFACT_VERSION,
@@ -189,6 +189,9 @@ def start_eval_batch(
                 "includeReact": request.include_react,
                 "model": request.model,
                 "toolData": "frozen",
+                # 门槛配置随批次记录(结果在工件 validity_threshold;任务五消费)
+                "minValidSamples": int(os.getenv("EVAL_MIN_VALID_SAMPLES", "5")),
+                "interleaveSeed": DEFAULT_INTERLEAVE_SEED,
             },
         )
     except DataServiceError as exc:
@@ -267,6 +270,9 @@ def start_context_batch(
                 "variants": list(COMPARISON_VARIANTS),
                 "model": request.model,
                 "toolData": "frozen",
+                # 门槛配置随批次记录(结果在工件 validity_threshold;任务五消费)
+                "minValidSamples": int(os.getenv("EVAL_MIN_VALID_SAMPLES", "5")),
+                "interleaveSeed": DEFAULT_INTERLEAVE_SEED,
             },
         )
     except DataServiceError as exc:
