@@ -35,17 +35,19 @@ const server = http.createServer(async (request, response) => {
 });
 
 async function serveStatic(requestPath, request, response) {
-  // / 与 /docs 都指向文档站索引；/docs/{page} 自动补 .html
-  if (requestPath === "/docs") {
-    response.writeHead(302, { Location: "/docs/" });
+  // / 指向实证层索引；/showcase 与 /docs 的 {page} 自动补 .html
+  if (requestPath === "/docs" || requestPath === "/showcase") {
+    response.writeHead(302, { Location: requestPath + "/" });
     response.end();
     return;
   }
   let target = requestPath;
-  if (requestPath === "/" || requestPath === "/docs/") target = "/docs/index.html";
-  else if (requestPath.startsWith("/docs/")) {
-    const docPath = requestPath.slice("/docs/".length);
-    if (!docPath.includes(".")) target = "/docs/" + docPath + ".html";
+  if (requestPath === "/") target = "/showcase/index.html";
+  else if (requestPath === "/showcase/" || requestPath === "/docs/") target = requestPath + "index.html";
+  else if (requestPath.startsWith("/showcase/") || requestPath.startsWith("/docs/")) {
+    const prefix = requestPath.startsWith("/showcase/") ? "/showcase/" : "/docs/";
+    const pagePath = requestPath.slice(prefix.length);
+    if (!pagePath.includes(".")) target = prefix + pagePath + ".html";
   }
   const decodedPath = decodeURIComponent(target);
   const relativePath = decodedPath.replace(/^[/\\]+/, "");
@@ -87,7 +89,7 @@ async function serveStatic(requestPath, request, response) {
 }
 
 server.listen(port, host, () => {
-  console.log(`Touchstone 展示站: http://${host}:${port}/docs/`);
+  console.log(`Touchstone 展示站: http://${host}:${port}/showcase/（架构讲解 /docs/）`);
 });
 
 for (const signal of ["SIGINT", "SIGTERM"]) {

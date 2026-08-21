@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>上下文对照 · Touchstone</title>
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/showcase/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="页面导航">
+      <a href="/showcase/">概览</a>
+      <details class="topnav-group">
+        <summary>实证展示</summary>
+        <div class="topnav-menu">
+          <a href="/showcase/results">对照结果</a>
+          <a href="/showcase/runs">单次运行</a>
+          <a href="/showcase/context">上下文对照</a>
+        </div>
+      </details>
+      <a href="/docs/">架构讲解</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#strategies">四种策略</a></li>
+      <li><a href="#list">用例列表</a></li>
+      <li><a href="#pairs">正反例成对展示</a></li>
+    </ul>
+    <div class="side-foot">压缩了什么、保留了什么、为什么<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>上下文策略对照</h1>
+    <h2 id="strategies">四种策略</h2>
+    <p>固定 Agent 实现方式，对照四种上下文处理策略：<strong>full</strong>（全量）、<strong>recent-n</strong>（最近 N 条）、<strong>single-summary</strong>（一次性摘要）、<strong>budgeted</strong>（按预算选择压缩）。模型窗口容纳不下 full 时该策略显示「不适用」，不把截断输入冒充 full。</p>
+    <div class="flow">原始上下文（有业务意义的数据，不凑长度）
+  → 分类：强制保留 / 可压缩 / 仅引用 / 干扰信息
+  → 按策略选择与压缩
+  → 工作上下文（≤ 预算）
+  → 保留率、召回率、引用完整率、净成本</div>
+    <h2 id="list">用例列表</h2>
+    <div id="contextList" class="placeholder-block">
+      <p>未运行：上下文构建器接入中。接入后此处显示每个用例的原始 token、工作 token、压缩比例、强制项保留率、关键事实正确率与四类时长。</p>
+    </div>
+    <h2 id="pairs">正反例成对展示</h2>
+    <p>同一用例的成功运行与失败运行并排展示，标注唯一变化的策略与来自校验器的失败原因；没有失败样本时显示「暂无失败样本」，且完整批次始终可查。</p>
+    <div id="contextPairs" class="placeholder-block"><p>未运行。</p></div>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+</body>
+</html>

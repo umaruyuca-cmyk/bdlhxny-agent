@@ -593,3 +593,15 @@ tr:nth-child(even) td { background: #fcfcfd; }
   .hero h1 { font-size: 29px; }
   .stat-grid { grid-template-columns: 1fr; }
 }
+
+/* ── 实证层占位块（数据未发布时的诚实提示）────────────────── */
+.placeholder-block {
+  border: 1px dashed var(--line, #d8dee9);
+  border-radius: 10px;
+  padding: 18px 20px;
+  margin: 14px 0 22px;
+  background: #fafbfd;
+  color: #5b6575;
+  font-size: 14px;
+}
+.placeholder-block code { font-size: 13px; }

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>对照结果 · Touchstone</title>
+<link rel="stylesheet" href="/docs/docs.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/showcase/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
+    <nav class="topnav" aria-label="页面导航">
+      <a href="/showcase/">概览</a>
+      <details class="topnav-group">
+        <summary>实证展示</summary>
+        <div class="topnav-menu">
+          <a href="/showcase/results">对照结果</a>
+          <a href="/showcase/runs">单次运行</a>
+          <a href="/showcase/context">上下文对照</a>
+        </div>
+      </details>
+      <a href="/docs/">架构讲解</a>
+    </nav>
+    <a class="topbar-gh" href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">GitHub</a>
+    <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" id="docsSide">
+    <h4>本页目录</h4>
+    <ul>
+      <li><a href="#tabs">两类实验分开看</a></li>
+      <li><a href="#agent">Agent 实现方式对照</a></li>
+      <li><a href="#context">上下文策略对照</a></li>
+      <li><a href="#outcomes">胜 / 负 / 平 / 双败 / 无效</a></li>
+    </ul>
+    <div class="side-foot">无效运行单列，不计入成功率<br><a href="https://github.com/umaruyuca-cmyk/bdlhxny-agent" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+  </aside>
+  <main class="docs-main">
+    <h1>对照结果</h1>
+    <h2 id="tabs">两类实验分开看</h2>
+    <p>Agent 实现方式对照与上下文策略对照是两个独立实验：<strong>同一张表不混排两种变量</strong>——混排后无法把差异归因给任一因素。</p>
+    <div id="resultTabs" class="placeholder-block">
+      <p>等待发布数据：批次报告（<code>/showcase-data/batches/{id}/report.json</code>）发布后，此处渲染总表、分场景明细与筛选。</p>
+    </div>
+    <h2 id="agent">Agent 实现方式对照</h2>
+    <div id="agentTable" class="placeholder-block"><p>未运行。</p></div>
+    <h2 id="context">上下文策略对照</h2>
+    <div id="contextTable" class="placeholder-block"><p>未运行：上下文构建器接入中。</p></div>
+    <h2 id="outcomes">胜 / 负 / 平 / 双败 / 无效</h2>
+    <p>结果展示五类结局计数（获胜、退化、平局、双方失败、无效），不只挑「基线失败、完整模式成功」的样本；完整批次始终可查。</p>
+    <div id="outcomeCounts" class="placeholder-block"><p>未运行。</p></div>
+  </main>
+</div>
+<script src="/docs/docs.js"></script>
+</body>
+</html>
