@@ -1,6 +1,6 @@
 """冻结工具返回种子同步守卫。
 
-数据库 seed（08 SQL）是 ``fixture_tool_responses`` 的唯一真源；单测注入的
+数据库 init.sql 的冻结数据段是 ``fixture_tool_responses`` 的唯一真源；单测注入的
 ``tests/eval/frozen_fixtures.py`` payload 是替身。两者漂移（改了一处忘另一处）即失败。
 """
 
@@ -11,7 +11,7 @@ from pathlib import Path
 
 from tests.eval.frozen_fixtures import FROZEN_RESPONSES
 
-_SEED_SQL = Path(__file__).resolve().parents[3] / "db" / "postgresql" / "setup" / "08-seed-tool-fixtures.sql"
+_SEED_SQL = Path(__file__).resolve().parents[3] / "db" / "postgresql" / "setup" / "init.sql"
 
 
 def _seed_rows() -> list[tuple[str, str]]:

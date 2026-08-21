@@ -26,8 +26,8 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d postgre
 ```
 
 数据库不会由 Data 服务自动初始化。首次启动必须按照
-[`db/postgresql/setup/README.md`](db/postgresql/setup/README.md) 手动执行四份 SQL，
-确认完成后再启动应用：
+[`db/postgresql/setup/README.md`](db/postgresql/setup/README.md) 手动执行初始化脚本
+`init.sql`（单一入口，含全部建表与种子数据），确认完成后再启动应用：
 
 ```powershell
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build data engine web

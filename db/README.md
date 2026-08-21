@@ -17,13 +17,7 @@ db/
    ├─ README.md
    ├─ setup/
    │  ├─ README.md
-   │  ├─ 01-create-base-tables.sql
-   │  ├─ 02-seed-fixed-cases.sql
-   │  ├─ 03-create-agent-comparison-tables.sql
-   │  ├─ 04-seed-agent-and-context-catalog.sql
-   │  ├─ 05-create-execution-detail-tables.sql
-   │  ├─ 06-create-accounts-tables.sql
-   │  └─ 07-create-tool-catalog-tables.sql
+   │  └─ init.sql
    ├─ changes/
    │  └─ README.md
    ├─ queries/
@@ -38,7 +32,7 @@ db/
 | 目录 | 用途 |
 |---|---|
 | `docs/` | 数据边界、表关系、字段规则和数据保留设计 |
-| `postgresql/setup/` | 新数据库第一次初始化时按顺序手动执行的 SQL |
+| `postgresql/setup/` | 新数据库第一次初始化时手动执行的单一脚本 `init.sql`（按原 01–08 顺序合并，分段事务与登记） |
 | `postgresql/changes/` | 数据库投入使用后的增量修改脚本 |
 | `postgresql/queries/` | 报表和排障使用的只读查询 |
 | `postgresql/maintenance/` | 备份、恢复、归档和清理规则 |

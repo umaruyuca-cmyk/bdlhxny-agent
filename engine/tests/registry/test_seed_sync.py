@@ -1,6 +1,6 @@
 """工具目录种子同步守卫。
 
-数据库 seed（07 SQL）是工具目录唯一真源；``tests/registry/seeded_store.py``
+数据库 init.sql 的工具目录段是唯一真源；``tests/registry/seeded_store.py``
 是单测注入的替身。两者漂移（改了一处忘另一处）即失败。
 """
 
@@ -12,7 +12,7 @@ from pathlib import Path
 
 from tests.registry.seeded_store import build_seeded_store
 
-_SEED_SQL = Path(__file__).resolve().parents[3] / "db" / "postgresql" / "setup" / "07-create-tool-catalog-tables.sql"
+_SEED_SQL = Path(__file__).resolve().parents[3] / "db" / "postgresql" / "setup" / "init.sql"
 
 _CAP_RE = re.compile(
     r"\('([a-z_.]+)', '[^']*', '[a-z]+', '(mcp|java|web|local)', (true|false),\s*"

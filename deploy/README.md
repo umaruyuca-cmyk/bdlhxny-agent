@@ -10,7 +10,8 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d postgre
 ```
 
 第一次部署时，按照 [`db/postgresql/setup/README.md`](../db/postgresql/setup/README.md)
-手动执行四份数据库初始化 SQL。数据库准备完成后再启动应用：
+手动执行数据库初始化脚本 `init.sql`（单一入口，含全部建表与种子数据）。
+数据库准备完成后再启动应用：
 
 ```powershell
 docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build data engine web
