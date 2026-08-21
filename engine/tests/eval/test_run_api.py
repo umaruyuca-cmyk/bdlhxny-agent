@@ -128,7 +128,7 @@ class FakeDataClient:
 
     def complete_batch(self, batch_id: str, status: str) -> None:
         assert batch_id == "batch-1"
-        assert status in {"COMPLETE", "FAILED"}
+        assert status in {"COMPLETE", "FAILED", "CANCELLED"}
 
     def save_events(self, run_id: str, events: list[dict[str, Any]]) -> None:
         self.saved_events.append((run_id, events))

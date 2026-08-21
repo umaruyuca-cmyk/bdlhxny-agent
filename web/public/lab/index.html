@@ -7,7 +7,7 @@
 <title>内部运行台 · Touchstone</title>
 <link rel="stylesheet" href="/docs/docs.css">
 <style>
-  .lab-main { max-width: 860px; margin: 0 auto; padding: 30px 22px 80px; }
+  .lab-main { max-width: 980px; margin: 0 auto; padding: 30px 22px 80px; }
   .lab-main h1 { font-size: 22px; }
   .lab-toolbar { display: flex; gap: 10px; align-items: center; margin: 12px 0 20px; font-size: 14px; }
   .lab-toolbar button { padding: 6px 14px; border: 1px solid #d8dee9; border-radius: 8px; background: #fff; cursor: pointer; }
@@ -21,9 +21,25 @@
   .lab-row input, .lab-row select { padding: 5px 8px; border: 1px solid #d8dee9; border-radius: 7px; font-size: 13.5px; }
   .lab-submit { padding: 9px 26px; border: 0; border-radius: 9px; background: #1f2d3d; color: #fff; font-size: 14px; cursor: pointer; }
   .lab-submit:disabled { background: #98a1af; cursor: not-allowed; }
+  .lab-cancel { padding: 6px 16px; border: 1px solid #b23b3b; border-radius: 8px; background: #fff; color: #b23b3b; cursor: pointer; }
+  .lab-cancel:disabled { color: #98a1af; border-color: #d8dee9; cursor: not-allowed; }
   .job-box { margin-top: 18px; border: 1px dashed #d8dee9; border-radius: 10px; padding: 14px 18px; font-size: 14px; }
-  .job-box .ok { color: #2c7a4b; } .job-box .bad { color: #b23b3b; }
+  .job-box .ok { color: #2c7a4b; } .job-box .bad { color: #b23b3b; } .job-box .warn { color: #9a6b0b; }
   .lab-note { color: #77808f; font-size: 12.5px; margin-top: 8px; }
+  .lab-table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; background: #fff; }
+  .lab-table th, .lab-table td { border: 1px solid #e6eaf1; padding: 5px 8px; text-align: left; }
+  .lab-table a { cursor: pointer; color: #1f5fa9; text-decoration: underline; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 9px; font-size: 12px; border: 1px solid #d8dee9; }
+  .badge.COMPLETE { color: #2c7a4b; border-color: #bfe0cc; }
+  .badge.FAILED, .badge.INVALID, .badge.CANCELLED { color: #b23b3b; border-color: #ecc8c8; }
+  .run-detail { margin-top: 10px; border: 1px solid #e6eaf1; border-radius: 10px; padding: 12px 16px; background: #fff; font-size: 13px; }
+  .run-detail h3 { margin: 4px 0 8px; font-size: 15px; }
+  .run-detail h4 { margin: 12px 0 4px; font-size: 13.5px; color: #39424f; }
+  .run-detail dl { display: grid; grid-template-columns: 130px 1fr; gap: 2px 10px; margin: 0; }
+  .run-detail dt { color: #77808f; } .run-detail dd { margin: 0; }
+  .event-list { list-style: none; padding-left: 0; margin: 4px 0 0; font-size: 12.5px; }
+  .event-list li { padding: 2px 0; border-bottom: 1px dashed #eef1f6; }
+  .event-list code { background: #f4f6fa; padding: 0 4px; border-radius: 4px; }
 </style>
 </head>
 <body>
@@ -43,13 +59,20 @@
     <div class="lab-row">
       <label>每题次数 <select id="runs"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
       <label><input type="checkbox" id="includeReact" checked> 含 LangGraph ReAct 组</label>
-      <label>模型 <input id="model" placeholder="缺省取服务端 LLM_MODEL" style="width:220px"></label>
+      <label>模型 <input id="model" placeholder="缺省取服务端 LLM_MODEL" style="width:200px"></label>
+      <label>批次 token 上限 <input id="maxTotalTokens" type="number" min="1" placeholder="不限" style="width:110px"></label>
       <button class="lab-submit" type="submit" id="submitBtn">发起批次</button>
     </div>
-    <p class="lab-note">批次在服务端串行执行（并发上限 1）；完成后再经发布脚本投影到公开实证层。</p>
+    <p class="lab-note">批次在服务端串行执行（并发上限 1）；执行中可协作取消（已开始的模型调用会等待完成）。完成后经发布脚本投影到公开实证层。</p>
   </form>
 
   <div class="job-box" id="jobBox" hidden></div>
+  <div id="batchSection" hidden>
+    <h2 style="font-size:17px;margin-top:26px">批次明细</h2>
+    <p style="color:#77808f;font-size:13px" id="batchMeta"></p>
+    <div id="runsTable"></div>
+    <div id="runDetail" class="run-detail" hidden></div>
+  </div>
 </main>
 <script>
 (function () {
@@ -93,6 +116,8 @@
     };
     var model = document.getElementById("model").value.trim();
     if (model) payload.model = model;
+    var tokens = Number(document.getElementById("maxTotalTokens").value);
+    if (tokens >= 1) payload.max_total_tokens = tokens;
 
     var btn = document.getElementById("submitBtn");
     var box = document.getElementById("jobBox");
@@ -110,22 +135,45 @@
     });
   });
 
+  function requestCancel(jobId) {
+    var button = document.getElementById("cancelBtn");
+    if (button) { button.disabled = true; button.textContent = "已请求取消…"; }
+    api("/api/v1/jobs/" + jobId + "/cancel", { method: "POST" }).then(function (outcome) {
+      if (outcome.status !== 200 && outcome.status !== 404) throw new Error("取消失败（" + outcome.status + "）");
+      if (button && outcome.body && outcome.body.status === "running") button.textContent = "取消中（等待当前运行完成）";
+    }).catch(function (err) {
+      if (button) { button.disabled = false; button.textContent = "取消批次"; }
+      var box = document.getElementById("jobBox");
+      box.insertAdjacentHTML("beforeend", ' <span class="bad">取消请求失败：' + err.message + "</span>");
+    });
+  }
+
   function poll(jobId, batchId) {
     var btn = document.getElementById("submitBtn");
     var box = document.getElementById("jobBox");
     api("/api/v1/jobs/" + jobId).then(function (outcome) {
       var job = outcome.body;
       if (job.status === "running") {
-        box.textContent = "批次执行中（batch " + batchId.slice(0, 8) + "）… 每题每组真实调用模型，18 题 × N 次通常需要数分钟";
+        box.innerHTML = '批次执行中（batch ' + batchId.slice(0, 8) + "）… 每题每组真实调用模型，18 题 × N 次通常需要数分钟 " +
+          '<button type="button" class="lab-cancel" id="cancelBtn">取消批次</button>';
+        document.getElementById("cancelBtn").addEventListener("click", function () { requestCancel(jobId); });
         setTimeout(function () { poll(jobId, batchId); }, 5000);
         return;
       }
       btn.disabled = false; btn.textContent = "发起批次";
-      if (job.status === "done") {
+      if (job.status === "done" || job.status === "cancelled") {
         var cases = job.report && job.report.cases ? job.report.cases.length : "?";
-        box.innerHTML = '<span class="ok">批次完成</span>：batch ' + batchId.slice(0, 8) +
-          " · " + cases + " 题。执行 <code>npm run publish:showcase -- --git-commit &lt;sha&gt;</code> 后结果进入公开实证层。" +
-          ' <a href="/showcase/results">查看已发布结果</a>';
+        var stopNote = job.status === "cancelled"
+          ? ' <span class="warn">批次已协作取消：已完成部分照常落库（部分完成）</span>'
+          : (job.report && job.report.stop_reason === "TOKEN_BUDGET_EXCEEDED"
+              ? ' <span class="warn">批次 token 预算耗尽，后续运行未发起（跳过 ' + job.report.skipped_runs + " 次）</span>"
+              : "");
+        var publishNote = job.status === "done"
+          ? "执行 <code>npm run publish:showcase -- --git-commit &lt;sha&gt;</code> 后结果进入公开实证层。"
+          : "取消的批次不发布；查看明细请展开批次运行列表。";
+        box.innerHTML = '<span class="ok">' + (job.status === "cancelled" ? "批次已取消" : "批次完成") + "</span>：batch " +
+          batchId.slice(0, 8) + " · " + cases + " 题。" + stopNote + " " + publishNote;
+        loadBatch(batchId);
       } else {
         box.innerHTML = '<span class="bad">批次失败</span>：' + (job.error || "未知错误");
       }
@@ -133,6 +181,83 @@
       box.innerHTML = '<span class="bad">状态查询失败：' + err.message + "</span>";
       btn.disabled = false; btn.textContent = "发起批次";
     });
+  }
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+    });
+  }
+
+  function loadBatch(batchId) {
+    api("/api/v1/batches/" + batchId).then(function (outcome) {
+      if (outcome.status !== 200) throw new Error("批次读取失败（" + outcome.status + "）");
+      var batch = outcome.body;
+      document.getElementById("batchSection").hidden = false;
+      document.getElementById("batchMeta").textContent =
+        "批次 " + batch.id.slice(0, 8) + " · 状态 " + batch.status + " · 运行 " + (batch.runs || []).length + " 条;点击运行号查看逐步明细。";
+      var rows = (batch.runs || []).map(function (run) {
+        return "<tr><td><a data-run=\"" + esc(run.id) + "\">" + esc(String(run.id).slice(-8)) + "</a></td>" +
+          "<td><span class=\"badge " + esc(run.status) + "\">" + esc(run.status) + "</span></td>" +
+          "<td>" + esc(run.agent_mode) + "</td><td>" + esc(run.case_id) + "</td>" +
+          "<td>" + esc(run.variant_id) + "</td><td>" + esc(run.model) + "</td></tr>";
+      }).join("");
+      document.getElementById("runsTable").innerHTML = rows
+        ? '<table class="lab-table"><thead><tr><th>运行</th><th>状态</th><th>组</th><th>题号</th><th>变体</th><th>模型</th></tr></thead><tbody>' + rows + "</tbody></table>"
+        : '<p class="lab-note">该批次没有落库运行。</p>';
+      Array.prototype.slice.call(document.querySelectorAll("#runsTable a")).forEach(function (link) {
+        link.addEventListener("click", function () { loadRunDetail(link.getAttribute("data-run")); });
+      });
+    }).catch(function (err) {
+      document.getElementById("runsTable").innerHTML = '<span class="bad">' + err.message + "</span>";
+    });
+  }
+
+  function loadRunDetail(runId) {
+    api("/api/v1/runs/" + runId + "/detail").then(function (outcome) {
+      if (outcome.status !== 200) throw new Error("运行明细读取失败（" + outcome.status + "）");
+      renderRunDetail(outcome.body);
+    }).catch(function (err) {
+      var box = document.getElementById("runDetail");
+      box.hidden = false;
+      box.innerHTML = '<span class="bad">' + err.message + "</span>";
+    });
+  }
+
+  function renderRunDetail(run) {
+    var box = document.getElementById("runDetail");
+    var events = (run.events || []).map(function (event) {
+      return "<li><code>" + esc(event.event_type) + "</code> <span class=\"lab-note\">#" + esc(event.sequence) + "</span></li>";
+    }).join("");
+    var models = (run.modelCalls || []).map(function (call) {
+      return "<li>#" + esc(call.sequence) + " " + esc(call.status) + " · in " + esc(call.input_tokens) +
+        " / out " + esc(call.output_tokens) + " tok · " + esc(call.duration_ms) + "ms" +
+        (call.error_category ? ' <span class="badge INVALID">' + esc(call.error_category) + "</span>" : "") + "</li>";
+    }).join("");
+    var tools = (run.toolCalls || []).map(function (call) {
+      return "<li><code>" + esc(call.tool_name) + "</code> " + esc(call.status) +
+        (call.audit_code ? " · " + esc(call.audit_code) : "") + " · " + esc(call.duration_ms) + "ms</li>";
+    }).join("");
+    var guards = (run.guardrailChecks || []).map(function (check) {
+      return "<li>" + esc(check.stage) + " → " + esc(check.decision) +
+        (check.audit_code ? " · <code>" + esc(check.audit_code) + "</code>" : "") + "</li>";
+    }).join("");
+    var m = (run.measurements && run.measurements[0]) || {};
+    box.hidden = false;
+    box.innerHTML = "<h3>运行 " + esc(String(run.id).slice(-8)) + "</h3>" +
+      "<dl>" +
+      "<dt>题号 / 变体</dt><dd>" + esc(run.case_id) + " / " + esc(run.variant_id) + "</dd>" +
+      "<dt>组 / 模型</dt><dd>" + esc(run.agent_mode) + " / " + esc(run.model) + "</dd>" +
+      "<dt>状态</dt><dd>" + esc(run.status) + (run.error_category ? " · " + esc(run.error_category) : "") + "</dd>" +
+      "<dt>快照</dt><dd>" + esc(run.snapshot_id) + "</dd>" +
+      "<dt>token / 耗时</dt><dd>prompt " + esc(m.prompt_tokens) + " · completion " + esc(m.completion_tokens) +
+        " · llm " + esc(m.llm_ms) + "ms · tool " + esc(m.tool_ms) + "ms · guardrail " + esc(m.guardrail_ms) +
+        "ms · 总 " + esc(m.total_duration_ms) + "ms</dd>" +
+      "</dl>" +
+      "<h4>事件流（run_events）</h4><ul class=\"event-list\">" + (events || "<li class=\"lab-note\">无</li>") + "</ul>" +
+      "<h4>模型调用（model_calls）</h4><ul class=\"event-list\">" + (models || "<li class=\"lab-note\">无</li>") + "</ul>" +
+      "<h4>工具调用（tool_calls）</h4><ul class=\"event-list\">" + (tools || "<li class=\"lab-note\">无</li>") + "</ul>" +
+      "<h4>治理检查（guardrail_checks）</h4><ul class=\"event-list\">" + (guards || "<li class=\"lab-note\">无</li>") + "</ul>";
   }
 })();
 </script>

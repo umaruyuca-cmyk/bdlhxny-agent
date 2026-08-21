@@ -21,12 +21,26 @@ test("/lab 登录页与批次页存在，只在此处允许表单与运行 API �
   }
   assert.match(login, /sessionStorage/, "登录令牌只进 sessionStorage");
   assert.match(index, /case_ids/, "批次页只提交题号与实验配置");
-  // 提交体只允许四个键（与 EvalBatchRequest 对齐），不得夹带问题正文
+  // 提交体只允许五个键（与 EvalBatchRequest 对齐），不得夹带问题正文
   const literal = index.match(/payload = \{([^}]*)\}/);
   const literalKeys = literal ? [...literal[1].matchAll(/\b([a-z_]+)\s*:/g)].map((m) => m[1]) : [];
   const assignKeys = [...index.matchAll(/payload\.([a-z_]+)\s*=/g)].map((m) => m[1]);
-  assert.deepEqual([...new Set([...literalKeys, ...assignKeys])].sort(), ["case_ids", "include_react", "model", "runs"]);
+  assert.deepEqual(
+    [...new Set([...literalKeys, ...assignKeys])].sort(),
+    ["case_ids", "include_react", "max_total_tokens", "model", "runs"],
+  );
   assert.doesNotMatch(index, /payload\.?(message|prompt|system_prompt|tools)/, "不得提交问题正文、提示词或自定义工具");
+});
+
+test("/lab 批次过程管理（任务四）：取消、预算与运行详情下钻均已接线", async () => {
+  const index = await readFile(new URL("../public/lab/index.html", import.meta.url), "utf8");
+  assert.match(index, /\/api\/v1\/jobs\/" \+ jobId \+ "\/cancel/, "取消按钮需调用协作取消端点");
+  assert.match(index, /max_total_tokens/, "表单需提供批次 token 上限");
+  assert.match(index, /\/api\/v1\/batches\//, "批次完成后可下钻运行列表");
+  assert.match(index, /\/api\/v1\/runs\/" \+ runId \+ "\/detail/, "运行列表可下钻单次运行逐步明细");
+  for (const table of ["modelCalls", "toolCalls", "guardrailChecks", "events", "measurements"]) {
+    assert.ok(index.includes(table), `运行详情需渲染 ${table}`);
+  }
 });
 
 test("公开页面（/showcase、/docs）不链接 /lab、不出现后端调用", async () => {
