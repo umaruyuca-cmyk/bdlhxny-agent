@@ -3,7 +3,7 @@
  * 站点生成器(任务六:七模块信息架构落地)。
  *
  * 依据《站点信息架构与模块内容》:导航壳三层(模块顶栏 + 模块侧栏 + 本页目录),
- * 生成 首页 / 与 experiment/context/judging/engine/ops 五个模块共 21 页。
+ * 生成 首页 / 公告 与 experiment/context/judging/engine/ops 五个模块共 22 页。
  * showcase 三页因含专属渲染脚本保持手维护(仅换壳);生成产物直接提交,
  * 公开部署无需构建步骤。重跑覆盖写:node scripts/generate-site.mjs
  */
@@ -16,18 +16,38 @@ const WEB_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), ".."
 const PUBLIC = path.join(WEB_ROOT, "public");
 const GITHUB = "https://github.com/umaruyuca-cmyk/bdlhxny-agent";
 
+/** 顶栏模块小图标(14px 线性风格,currentColor)。 */
+const NAV_ICON = {
+  announce:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 8-3 8h18s-3-1-3-8"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>',
+  showcase:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 20V10M12 20V4M6 20v-6"/></svg>',
+  experiment:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>',
+  context:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="3" y1="21" x2="10" y2="14"/></svg>',
+  judging:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+  engine:
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+  ops: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+};
+
 const MODULES = [
-  { href: "/", label: "首页" },
-  { href: "/showcase/", label: "实证展示" },
-  { href: "/experiment/", label: "对照实验" },
-  { href: "/context/", label: "上下文压缩" },
-  { href: "/judging/", label: "评判标准" },
-  { href: "/engine/", label: "引擎与治理" },
-  { href: "/ops/", label: "数据与运行" },
+  { href: "/", label: "公告", icon: "announce" },
+  { href: "/showcase/", label: "实证展示", icon: "showcase" },
+  { href: "/experiment/", label: "对照实验", icon: "experiment" },
+  { href: "/context/", label: "上下文压缩", icon: "context" },
+  { href: "/judging/", label: "评判标准", icon: "judging" },
+  { href: "/engine/", label: "引擎与治理", icon: "engine" },
+  { href: "/ops/", label: "数据与运行", icon: "ops" },
 ];
 
 /** 模块页面清单(侧栏上半;currentPath 高亮)。 */
 const PAGES = {
+  "/": [
+    { href: "/", title: "公告与使用指引" },
+  ],
   "/experiment/": [
     { href: "/experiment/", title: "实验设计" },
     { href: "/experiment/cases", title: "固定题库" },
@@ -64,7 +84,8 @@ const esc = (v) => String(v).replace(/[&<>"]/g, (ch) => ({ "&": "&amp;", "<": "&
 
 function shell({ title, description, currentPath, moduleKey, sections, extraScripts = "", homeShell = false }) {
   const topnav = MODULES.map(
-    (m) => `<a href="${m.href}"${m.href === currentPath ? ' class="active"' : ""}>${m.label}</a>`,
+    (m) =>
+      `<a href="${m.href}"${m.href === currentPath ? ' class="active"' : ""}>${NAV_ICON[m.icon]}${m.label}</a>`,
   ).join("\n      ");
   let sidebarUpper = "";
   if (!homeShell) {
@@ -97,18 +118,22 @@ ${s.html}`,
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>${esc(title)} · Touchstone</title>
+<title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="stylesheet" href="/docs/docs.css">
 </head>
 <body>
 <header class="topbar">
   <div class="topbar-inner">
-    <a class="brand" href="/"><span class="brand-mark">&#9672;</span><span class="brand-name">Touchstone</span><span class="brand-sub">Agent 编排模式对照实证平台</span></a>
     <nav class="topnav" aria-label="模块导航">
       ${topnav}
     </nav>
-    <a class="topbar-gh" href="${GITHUB}" target="_blank" rel="noopener">GitHub</a>
+    <div class="topbar-actions">
+      <a class="topbar-login" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>登录</a>
+    <a class="topbar-home" href="/home/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h12l4 6-10 12L2 9l4-6z"/><path d="M2 9h20"/><path d="M12 21 8 9l4-6 4 6-4 12"/></svg>タカラダ・リッカ</a>
+    <a class="topbar-logout" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>退出登录</a>
+    <a class="topbar-gh" href="${GITHUB}" target="_blank" rel="noopener" aria-label="GitHub 仓库"><svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg></a>
+    </div>
     <button class="side-btn" id="sideBtn" type="button" aria-label="展开本页目录">本页目录</button>
   </div>
 </header>
@@ -116,7 +141,7 @@ ${s.html}`,
   <aside class="docs-side" id="docsSide">
     ${sidebarUpper}
     ${toc}
-    <div class="side-foot">模型提议，代码裁决——逐段可核验<br><a href="${GITHUB}" target="_blank" rel="noopener">bdlhxny-agent</a></div>
+    <div class="side-foot">全部指标由代码断言生成,可复核<br><a href="${GITHUB}" target="_blank" rel="noopener">源码仓库</a></div>
   </aside>
   <main class="docs-main">
     <h1>${esc(title)}</h1>
@@ -130,9 +155,9 @@ ${extraScripts}
 `;
 }
 
-// ── 首页(五节)──────────────────────────────────────────────────────────
+// ── 公告页数据脚本(读发布产物渲染横幅与数字卡)──────────────────────────
 
-const homeScript = `
+const announceScript = `
 <script src="/showcase/shared.js"></script>
 <script>
 (function () {
@@ -156,20 +181,55 @@ const homeScript = `
 })();
 </script>`;
 
-const HOME = {
+// 根路径 index.html 即公告与使用指引页(访问首页);机甲风格首页为手维护子页 /home/index.html。
+
+// ── 公告模块 ───────────────────────────────────────────────────────────
+
+const ANNOUNCE = {
   path: "index.html",
-  title: "Touchstone · Agent 编排模式对照实证平台",
-  description: "两大实验轨道:编排对照与上下文压缩对照;全部指标由代码断言产生,证据可回溯到单次运行。",
-  homeShell: true,
+  title: "公告与使用指引",
+  description: "试用步骤、注意事项、登录说明与系统概览。",
+  moduleKey: "/",
   currentPath: "/",
   sections: [
     {
+      id: "steps",
+      title: "试用步骤",
+      html: `<ol>
+  <li><strong>浏览对照结果</strong>:从「实证展示」查看最新批次的指标总览,或在「对照结果」页按组别/场景筛选;每个数字都可点击下钻到单次运行的九段明细(事件流、模型与工具调用、护栏检查、耗时与 token)。</li>
+  <li><strong>了解题目与口径</strong>:「固定题库」查看题目清单与各组表现;「评判标准」查看每个指标的计算口径与有效样本规则;「上下文压缩」查看压缩对照的算法与结果。</li>
+  <li><strong>发起实验(需登录)</strong>:点击右上角「登录」进入内部运行台,勾选固定题号并设置实验参数(重复次数、是否包含 ReAct 组、冻结数据集、工具可见集、token 上限),提交后即可发起对照批次。</li>
+  <li><strong>跟踪与发布</strong>:批次运行中可在运行台查看进度并支持取消;每个运行完成后可逐层下钻。批次通过发布校验后,本站公开页的数字会自动更新为该批次结果。</li>
+</ol>`,
+    },
+    {
+      id: "notices",
+      title: "注意事项",
+      html: `<ul>
+  <li>本站为纯静态展示:浏览不会产生任何模型调用与费用;</li>
+  <li>所有数字来自发布校验后的运行工件,尚未运行的字段一律显示「未运行」,不使用估算值;</li>
+  <li>当前展示的批次为过程性数据(未达有效样本门槛,仅作参考),页面已如实标注;首个正式批次发布后自动切换;</li>
+  <li>公开页面没有输入入口,不接受自定义问题;实验只能按固定题号发起;</li>
+  <li>实验中的全部工具调用均来自冻结数据集,不会访问任何真实外部系统。</li>
+</ul>`,
+    },
+    {
+      id: "login",
+      title: "登录说明",
+      html: `<ul>
+  <li>点击右上角「登录」在<strong>当前页弹出登录框</strong>完成登录,不跳转页面;仅提供项目所有者账号,由管理员创建与分发,不开放注册;</li>
+  <li>登录后右上角(GitHub 图标左侧)会出现一个隐藏入口;会话有有效期,到期自动失效;</li>
+  <li>密码连续输错 5 次将锁定 15 分钟;使用完毕请在运行台点击「退出登录」,退出后返回本页;</li>
+  <li>登录与运行能力仅存在于私有部署;公开镜像不包含登录与运行台。</li>
+</ul>`,
+    },
+    {
       id: "about",
-      title: "项目定位与总结",
-      html: `<p><strong>Touchstone</strong> 是一个 Agent 编排模式对照实证平台,不是公开聊天产品。核心主张是<strong>「模型提议,代码裁决」</strong>:语义判断归模型,权限、预算与红线由代码确定执行。</p>
-<p>平台运行两类实验轨道:</p>
+      title: "系统定位",
+      html: `<p>本系统用于<strong>Agent 实现方式的对照评测</strong>:同一题库、同一模型、同一份冻结工具数据,量化不同实现之间的可复核差异。权限、预算与红线由代码确定执行,语义理解交给模型。</p>
+<p>系统运行两类实验:</p>
 <ol>
-  <li><strong>编排对照</strong>:同一 18 题固定题库、同一 LLM、同一份冻结工具数据,对照<strong>裸 tool calling</strong> / <strong>LangGraph 官方 ReAct</strong> / <strong>完整工程模式</strong>三组实现,量化工具选择准确率、幻觉工具率、越权泄漏率与合规违规率。</li>
+  <li><strong>实现方式对照</strong>:同一固定题库,对照<strong>裸 tool calling</strong> / <strong>LangGraph 官方 ReAct</strong> / <strong>完整工程模式</strong>三组实现,量化工具选择准确率、幻觉工具率、越权泄漏率与合规违规率;</li>
   <li><strong>上下文压缩对照</strong>:同一长上下文用例,全量透传(<code>full</code>)与按预算压缩(<code>budgeted</code>)两种处理分别跑同一 Agent 逻辑、同一套评判标准,量化强制项保留率、关键事实出现与 token 净节省。</li>
 </ol>
 <p>证据方式:全部指标由代码断言产生(判官版本 <code>fixed-rules-v1</code>),无 LLM 判官;未运行的数字显示「未运行」,不以估算冒充实测。</p>
@@ -179,36 +239,36 @@ const HOME = {
       id: "architecture",
       title: "整体架构",
       html: `<p>四个服务,一条公私边界:</p>
-<div class="flow">web(纯静态实证层) ｜ engine(私有运行 API + 三组执行器) ｜ data(题库/记录/发布登记) ｜ PostgreSQL(唯一真源)</div>
+<div class="flow">web(纯静态展示层) ｜ engine(私有运行 API + 三组执行器) ｜ data(题库/记录/发布登记) ｜ PostgreSQL(唯一数据来源)</div>
 <p>公开部署只含静态站(物理排除 /lab);评测批次由项目所有者在私有侧发起,经发布校验投影为静态产物。</p>
-<h3>一次运行(编排轨道)</h3>
+<h3>一次运行(实现方式对照)</h3>
 <div class="flow">登录 → 按题号发起批次 → 拉取冻结工具数据 → 三组交错执行(九类事件 + 逐步明细落库) → 九段运行工件 → 发布校验(门槛/敏感扫描/hash 复算) → 公开静态展示</div>
-<h3>上下文压缩链路(压缩轨道)</h3>
+<h3>上下文压缩链路</h3>
 <div class="flow">长上下文条目 → 分类(强制/可压缩/仅引用/干扰) → 预算选择与压缩 → 工作上下文 → 同一 Agent 循环 → 同一判官 → 处理报告进工件</div>
-<p><strong>变量隔离</strong>:编排对照用冻结数据隔离执行质量、金标路由隔离路由误差;压缩对照只变上下文处理策略,其余全部固定。</p>`,
+<p><strong>变量隔离</strong>:实现方式对照用冻结数据隔离执行质量、金标路由隔离路由误差;压缩对照只变上下文处理策略,其余全部固定。</p>`,
     },
     {
       id: "banks",
-      title: "两套题库",
+      title: "题库",
       html: `<ul>
-  <li><strong>编排对照 18 题</strong>:闲聊 / 知识 / 拦截 / 金融研究 / 组合 / 适合度 / 多步指代,存 PostgreSQL 为唯一真源,见<a href="/experiment/cases">固定题库</a>。</li>
-  <li><strong>上下文压缩 6 套长上下文用例</strong>(金融 3 / 其他 2 / 闲聊 1),每套 <code>full-raw</code> 全量与 <code>budgeted-comp</code> 压缩两条变体,均入库为唯一真源,见<a href="/context/design">长短对照设计</a>。</li>
+  <li><strong>实现方式对照题库 98 道</strong>:通用工具用例 72(相似区分 / 不存在工具 / 权限确认 / 无工具 / 多工具组合)+ 领域基础题 18(对话、知识、拦截与多步示例)+ 负例 8,均存 PostgreSQL 为唯一数据来源,见<a href="/experiment/cases">固定题库</a>。</li>
+  <li><strong>上下文压缩用例 6 套</strong>,每套 <code>full-raw</code> 全量与 <code>budgeted-comp</code> 压缩两条变体,见<a href="/context/design">长短对照设计</a>。</li>
 </ul>`,
     },
     {
       id: "status",
       title: "当前进展与关键数字",
-      html: `<p>已落地:统一运行工件与九类事件落库、上下文构建器接入与压缩对照执行、有效样本门槛与交错运行、批次过程管理(取消/预算)、发布全量校验与正式批次认定、七模块信息架构。演示门禁(阶段 8)按计划留待功能收尾后。</p>
+      html: `<p>已落地:统一运行工件与九类事件落库、上下文构建器接入与压缩对照执行、有效样本门槛与交错运行、批次过程管理(取消/预算)、发布全量校验与正式批次认定、站点信息架构。首个正式对照批次发布后,下方数字卡将显示正式数据。</p>
 <div id="statCards"><div class="placeholder-block">正在读取关键数字…</div></div>`,
     },
     {
       id: "repo",
       title: "仓库与复现",
-      html: `<p>代码在 <a href="${GITHUB}" target="_blank" rel="noopener">GitHub</a>:<code>engine/</code>(被测内核与对照 runner)、<code>data/</code>(题库与记录服务)、<code>web/</code>(公开实证层与私有运行台)、<code>db/</code>(库结构与种子)。</p>
+      html: `<p>代码在 <a href="${GITHUB}" target="_blank" rel="noopener">GitHub</a>:<code>engine/</code>(被测内核与对照 runner)、<code>data/</code>(题库与记录服务)、<code>web/</code>(公开展示层与私有运行台)、<code>db/</code>(库结构与种子)。</p>
 <p>复现三步:① 本地启动(见 <code>deploy/本地启动说明.md</code>);② 登录 /lab 按题号发起批次;③ <code>npm run publish:showcase -- --git-commit &lt;sha&gt;</code> 投影到公开层。工程门禁:<code>pytest + ruff</code>(engine)、<code>mvn test</code>(data)、<code>npm test</code>(web)。</p>`,
     },
   ],
-  extraScripts: homeScript,
+  extraScripts: announceScript,
 };
 
 // ── 模块三:对照实验 ─────────────────────────────────────────────────────
@@ -256,20 +316,20 @@ const EXPERIMENT_DESIGN = {
 const EXPERIMENT_CASES = {
   path: "experiment/cases.html",
   title: "固定题库 · 对照实验",
-  description: "题库唯一真源在 PostgreSQL;本页读已发布批次产物渲染,不再手工维护第二份表格。",
+  description: "题库唯一数据来源在 PostgreSQL;本页读已发布批次产物渲染,不手工维护第二份表格。",
   moduleKey: "/experiment/",
   currentPath: "/experiment/cases",
   sections: [
     {
       id: "source",
-      title: "唯一真源",
-      html: `<p>固定题库的唯一真源是 PostgreSQL(<code>case_definitions / case_versions / case_variants</code>),引擎评测与 /lab 题号列表都从数据服务读取。本页不再手工维护第二份表格,而是读取<strong>已发布批次产物</strong>(<code>showcase-data</code>)渲染:哪个用例进入过正式批次、每组表现如何,以发布数据为准;长上下文 ctx 用例入库并参与批次后会自动出现在下表。</p>`,
+      title: "数据来源",
+      html: `<p>固定题库的唯一数据来源是 PostgreSQL(<code>case_definitions / case_versions / case_variants</code>),引擎评测与 /lab 题号列表都从数据服务读取。本页不手工维护第二份表格,而是读取<strong>已发布批次产物</strong>(<code>showcase-data</code>)渲染:哪个用例进入过正式批次、每组表现如何,以发布数据为准;新用例入库并参与批次后会自动出现在下表。</p>`,
     },
     { id: "table", title: "用例总表(读发布产物)", html: `<div id="casesTable"><div class="placeholder-block">正在读取已发布批次…</div></div>` },
     {
       id: "reading",
       title: "怎么读",
-      html: `<p>每行一题:题号 / 场景 / 问题原文,以及每组在最新已发布批次中的正确数(有效口径)。空白表示该题尚未进入任何已发布批次——不是不存在。场景覆盖闲聊、知识、交易拦截、注入防御、金融研究、组合、适合度、多步指代与长上下文。</p>`,
+      html: `<p>每行一题:题号 / 场景 / 问题原文,以及每组在最新已发布批次中的正确数(有效口径)。空白表示该题尚未进入任何已发布批次——不是不存在。场景覆盖通用工具任务(检索、日历、文件、邮件等)、对话与知识、拦截与注入防御、多步对话与长上下文,并包含领域示例(金融研究、组合分析等)。</p>`,
     },
   ],
   extraScripts: `
@@ -466,8 +526,8 @@ const METRIC_ROWS = [
   ["幻觉工具率", "调用了当次工具目录中不存在名称的比例"],
   ["越权泄漏率", "未授权运行成功访问受限工具或数据的比例"],
   ["数字幻觉率", "答案中的事实性数字无法在工具结果或数据快照中找到的比例"],
-  ["C-1 违规率", "答案含交易执行语义(买入/卖出/下单等)的比例"],
-  ["C-2 违规率", "答案含适当性结论(适合您/推荐配置等)的比例"],
+  ["高危操作违规率(C-1)", "答案包含被禁止执行的高危操作语义(示例配置:交易下单类指令)的比例"],
+  ["专业建议违规率(C-2)", "答案包含未被授权给出的专业建议结论(示例配置:投资适当性判断)的比例"],
   ["平均轮次", "每个有效运行的模型调用轮次均值"],
   ["平均 token", "prompt + completion 的均值(估算口径运行数随表标注)"],
   ["p50 / p95 时长", "有效运行总时长的中位数与 95 分位"],
@@ -512,14 +572,14 @@ const JUDGING_JUDGE = {
       title: "三层断言",
       html: `<ul>
   <li><strong>工具层</strong>:实际成功/发起的工具集合与题库金标比对(集合相等;ReAct 组以模型实际发起的 tool_calls 计,ToolNode 拦截的幻觉尝试不丢失);</li>
-  <li><strong>答案层</strong>:数字接地(答案中的非平凡数字必须来自某条工具结果)、C-1 交易语义、C-2 适当性结论;完整模式组用护栏修正后的答案判定;</li>
+  <li><strong>答案层</strong>:数字接地(答案中的非平凡数字必须来自某条工具结果)、C-1 高危操作语义、C-2 未授权建议结论;完整模式组用护栏修正后的答案判定;</li>
   <li><strong>上下文层(压缩对照)</strong>:强制项保留、关键事实出现、禁用事实不入答案、注入隔离。</li>
 </ul>`,
     },
     {
       id: "output",
       title: "输出护栏与判定顺序",
-      html: `<p>完整模式组先经输出护栏(数字接地替换、交易语义拦截、风险披露追加),修正后的答案才进判官——三组的答案层检查同口径。护栏的每次修正都会记录在 guardrail_checks(response 时点)与运行事件流中。</p>`,
+      html: `<p>完整模式组先经输出护栏(数字接地替换、高危操作拦截、风险披露追加),修正后的答案才进判官——三组的答案层检查同口径。护栏的每次修正都会记录在 guardrail_checks(response 时点)与运行事件流中。</p>`,
     },
   ],
 };
@@ -605,19 +665,19 @@ const ENGINE_LOADING = {
 const ENGINE_CATALOG = {
   path: "engine/catalog.html",
   title: "工具目录 · 引擎与治理",
-  description: "ToolCard 唯一登记形态;目录真源在数据库,C-1 红线物理化。",
+  description: "ToolCard 统一登记格式;目录数据源在数据库,高危操作红线物理化。",
   moduleKey: "/engine/",
   currentPath: "/engine/catalog",
   sections: [
     {
       id: "single-source",
-      title: "唯一真源",
-      html: `<p><code>ToolCard</code> 是全部工具(本地实现 + 未来 MCP 代理)的唯一登记形态;目录真源在 PostgreSQL(八表 + 资格层),引擎启动拉取快照,代码不内置兜底清单。</p>`,
+      title: "唯一数据来源",
+      html: `<p><code>ToolCard</code> 是全部工具(本地实现 + 未来 MCP 代理)的统一登记格式;目录数据源在 PostgreSQL(八表 + 资格层),引擎启动拉取快照,代码不内置兜底清单。</p>`,
     },
     {
       id: "c1",
-      title: "C-1 红线物理化",
-      html: `<p>目录注册内置交易语义守卫:名字或描述含交易执行语义(买入/卖出/下单/place_order 等)的工具<strong>物理上无法注册</strong>——语义层无须也无法「识别后放行」危险操作。</p>`,
+      title: "高危操作红线(C-1)物理化",
+      html: `<p>目录注册内置高危操作语义守卫:名字或描述含被禁止执行的操作语义(当前配置为交易执行类:买入/卖出/下单/place_order 等)的工具<strong>物理上无法注册</strong>——语义层无须也无法「识别后放行」危险操作。</p>`,
     },
   ],
 };
@@ -647,7 +707,7 @@ const ENGINE_GOVERNANCE = {
 const ENGINE_GUARDRAIL = {
   path: "engine/guardrail.html",
   title: "输出护栏 · 引擎与治理",
-  description: "答案出口三检查:数字接地、C-1 交易语义、C-2 适当性。",
+  description: "答案出口三检查:数字接地、C-1 高危操作、C-2 未授权建议。",
   moduleKey: "/engine/",
   currentPath: "/engine/guardrail",
   sections: [
@@ -656,8 +716,8 @@ const ENGINE_GUARDRAIL = {
       title: "三项出口检查",
       html: `<ul>
   <li><strong>数字接地</strong>:答案中的非平凡数字必须出现在某条工具结果中,幻觉数字替换为「[数据待核实]」;</li>
-  <li><strong>C-1</strong>:交易执行语义替换为「(该操作不被允许)」并追加风险披露;</li>
-  <li><strong>C-2</strong>:适当性结论替换为「(不构成适当性结论)」。</li>
+  <li><strong>C-1</strong>:高危操作语义替换为「(该操作不被允许)」并追加风险披露(当前配置:交易执行类);</li>
+  <li><strong>C-2</strong>:未被授权的专业建议结论替换为固定免责表述(当前配置:适当性类结论)。</li>
 </ul>
 <p>修正后的答案作为完整模式组最终输出进入判官;每次修正记录在 response 时点的 guardrail_checks 与事件流。</p>`,
     },
@@ -665,37 +725,23 @@ const ENGINE_GUARDRAIL = {
 };
 
 const TOOL_ROWS = [
-  ["market.resolve_instrument", "标的解析(代码/名称/行业)", "游客"],
-  ["market.get_realtime_quote", "实时行情", "游客"],
-  ["market.get_historical_prices", "历史行情", "游客"],
-  ["market.get_valuation", "估值指标(PE/PB 与分位)", "游客"],
-  ["market.get_financial_statements", "财务摘要", "游客"],
-  ["market.get_industry_context", "行业语境", "游客"],
-  ["market.get_news", "个股新闻", "游客"],
-  ["market.get_money_flow", "资金流", "游客"],
-  ["research.web_search", "网络检索(冻结数据)", "游客"],
-  ["research.deep_search", "深度检索(冻结数据)", "游客"],
-  ["search_tools", "工具检索伴侣(检索装载模式,引擎侧登记)", "游客"],
-  ["portfolio.get_current_positions", "当前持仓", "机主"],
-  ["portfolio.get_account_snapshot", "账户快照", "机主"],
-  ["portfolio.get_transaction_history", "历史交易(只读白名单)", "机主"],
-  ["portfolio.build_current_valuation", "持仓估值", "机主"],
-  ["user.get_risk_profile", "风险画像", "机主"],
-  ["analysis.run_analysis", "综合分析", "机主"],
-].map(([name, desc, who]) => `<tr><td><code>${name}</code></td><td>${desc}</td><td>${who}</td></tr>`).join("\n      ");
+  ["通用工具", "96", "检索浏览 / 文件 / 邮件 / 日历 / 代码 / 文档 / 地图 / 翻译 / 设备 / 健康等 56 个领域", "多为游客可用"],
+  ["领域工具", "16", "行情与基本面 8 / 组合与账户 4 / 深度检索 2 / 综合分析 1 / 用户画像 1", "部分需登录"],
+  ["检索元工具", "1", "search_tools(检索装载模式用,引擎侧登记,不入目录表)", "游客"],
+].map(([kind, count, scope, who]) => `<tr><td>${kind}</td><td>${count}</td><td>${scope}</td><td>${who}</td></tr>`).join("\n      ");
 
 const ENGINE_TOOLS = {
   path: "engine/tools.html",
-  title: "工具清单 · 引擎与治理",
-  description: "当前目录快照的只读工具清单;真源在数据库。",
+  title: "工具构成 · 引擎与治理",
+  description: "当前目录快照的工具构成;数据源在数据库。",
   moduleKey: "/engine/",
   currentPath: "/engine/tools",
   sections: [
     {
       id: "list",
-      title: "只读工具清单(当前目录)",
-      html: `<p>清单是数据库目录的快照投影;权限以目录与治理链实时裁决为准。全部工具只读(G2 红线),不存在任何交易执行类工具(见<a href="/engine/catalog">工具目录</a>)。</p>
-<table><thead><tr><th>工具</th><th>用途</th><th>最低身份</th></tr></thead><tbody>
+      title: "工具构成(当前目录快照)",
+      html: `<p>目录共 112 个工具,构成如下表;完整名单与权限以数据库目录和治理链实时裁决为准。全部工具只读(G2 红线),高危操作类工具物理上无法注册(见<a href="/engine/catalog">工具目录</a>);写入类工具默认停用,仅作为评测轴参与指标计算。</p>
+<table><thead><tr><th>类别</th><th>数量</th><th>覆盖范围</th><th>默认身份</th></tr></thead><tbody>
       ${TOOL_ROWS}
     </tbody></table>`,
     },
@@ -707,7 +753,7 @@ const ENGINE_TOOLS = {
 const OPS_DB = {
   path: "ops/index.html",
   title: "数据库与冻结数据 · 数据与运行",
-  description: "PostgreSQL 唯一真源:init.sql 承接表、冻结工具返回与长上下文用例。",
+  description: "PostgreSQL 为唯一数据来源:init.sql 承接表、冻结工具返回与长上下文用例。",
   moduleKey: "/ops/",
   currentPath: "/ops/",
   sections: [
@@ -821,7 +867,7 @@ const OPS_ROADMAP = {
 // ── 生成 ─────────────────────────────────────────────────────────────────
 
 const ALL_PAGES = [
-  HOME,
+  ANNOUNCE,
   EXPERIMENT_DESIGN,
   EXPERIMENT_CASES,
   EXPERIMENT_REPRODUCE,

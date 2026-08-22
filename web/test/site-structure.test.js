@@ -4,8 +4,8 @@ import assert from "node:assert/strict";
 import { REDIRECTS, redirectFor } from "../scripts/redirect-map.mjs";
 
 /**
- * 站点结构契约(任务六:七模块信息架构)。
- * 模块:首页 / + 实证展示 /showcase(3)+ 对照实验 /experiment(3)+
+ * 站点结构契约:公告首页 / + 机甲风格子页 /home(1)+ 六模块。
+ * 模块:公告(即访问首页)/ + 实证展示 /showcase(3)+ 对照实验 /experiment(3)+
  * 上下文压缩 /context(3)+ 评判标准 /judging(3)+ 引擎与治理 /engine(6)+
  * 数据与运行 /ops(5)。
  */
@@ -28,7 +28,7 @@ async function readPage(page) {
   return readFile(new URL(`../public${page}`, import.meta.url), "utf8");
 }
 
-test("七模块 24 页齐备,共享三层导航壳(模块顶栏 + 模块侧栏 + 本页目录)", async () => {
+test("模块页齐备,共享三层导航壳(模块顶栏 + 模块侧栏 + 本页目录)", async () => {
   assert.equal(SITE_PAGES.length, 24);
   for (const page of SITE_PAGES) {
     const html = await readPage(page);
@@ -46,7 +46,7 @@ test("七模块 24 页齐备,共享三层导航壳(模块顶栏 + 模块侧栏 +
   }
 });
 
-test("模块首页从首页可达(互链)", async () => {
+test("模块首页从公告首页可达(互链)", async () => {
   const home = await readPage("/index.html");
   for (const href of MODULE_HREFS.slice(1)) {
     assert.ok(home.includes(`href="${href}"`), `首页缺少模块入口 ${href}`);
@@ -72,6 +72,7 @@ test("旧路径 301:redirect-map 与两台服务器一致", async () => {
       `nginx 缺少 301:${from} → ${to}`,
     );
   }
+  assert.match(nginx, /location \/home\//, "nginx 需服务机甲子页前缀");
   assert.match(nginx, /location \/experiment\//, "nginx 需服务新模块前缀");
   assert.match(nginx, /location \/ops\//, "nginx 需服务新模块前缀");
 });
@@ -99,13 +100,25 @@ test("题库页去硬编码:数据驱动渲染,不含题号字面量", async () 
   assert.doesNotMatch(cases, /research-01|ctx-port-01|chat-01|miss-01/, "题库页不得硬编码题号表格");
 });
 
-test("首页五节(定位/架构/题库/进展/仓库)与数据驱动数字卡", async () => {
-  const home = await readPage("/index.html");
-  for (const anchor of ["about", "architecture", "banks", "status", "repo"]) {
-    assert.ok(home.includes(`id="${anchor}"`), `首页缺少第 ${anchor} 节`);
+test("公告首页含使用指引与概览五节,数据驱动数字卡", async () => {
+  const announce = await readPage("/index.html");
+  for (const anchor of ["steps", "notices", "login", "about", "architecture", "banks", "status", "repo"]) {
+    assert.ok(announce.includes(`id="${anchor}"`), `公告页缺少第 ${anchor} 节`);
   }
-  assert.match(home, /showcase-data\/index\.json/, "首页数字卡读发布产物");
-  assert.match(home, /renderStatCards|renderHomeBanner/, "首页复用实证层渲染函数");
+  assert.match(announce, /试用步骤/, "使用指引需在最上部");
+  assert.match(announce, /showcase-data\/index\.json/, "数字卡读发布产物");
+  assert.match(announce, /renderStatCards|renderHomeBanner/, "复用实证层渲染函数");
+});
+
+test("机甲风格子页 /home: 纯静态、唯一进入系统按钮、无导航堆叠", async () => {
+  const home = await readPage("/home/index.html");
+  assert.ok(home.includes('href="/"'), "机甲页需提供进入系统入口(指向公告首页)");
+  assert.ok(home.includes("进入系统"), "右上角进入系统按钮需存在");
+  assert.doesNotMatch(home, /id="navLinks"|id="menuToggle"/, "机甲页不再堆叠引/护/问/藏导航");
+  assert.ok((home.match(/href="\/lab/g) || []).length <= 1, "登录入口至多一个");
+  assert.doesNotMatch(home, /\/api\/v1\//, "机甲页不得出现后端 API");
+  assert.doesNotMatch(home, /<input|<textarea/, "机甲页不得出现输入控件");
+  assert.doesNotMatch(home, /sessionStorage|localStorage/, "机甲页无会话概念");
 });
 
 test("旧 docs 页面已删除,资产保留", async () => {

@@ -159,9 +159,9 @@ test("达标批次发布:index 正式认定 + 逐运行工件 + report 真实有
   const base = report.groups.find((g) => g.key === "baseline-tool-calling");
   const full = report.groups.find((g) => g.key === "full-system");
   assert.deepEqual({ valid: base.valid_runs, invalid: base.invalid_runs }, { valid: 1, invalid: 0 });
-  // validity 真实值:UNCLASSIFIED 退役,task_success_rate 来自 VALID-only 真实指标
-  assert.equal(base.metrics.task_success_rate, 0);
-  assert.equal(full.metrics.task_success_rate, 1);
+  // task_success_rate 诚实口径:判定未实现前恒 null,不以工具选择率冒充
+  assert.equal(base.metrics.task_success_rate, null);
+  assert.equal(full.metrics.task_success_rate, null);
   assert.equal(report.outcome_counts.invalid, 0);
   // 汇总数字可回溯:cases[].run_ids 指向已发布运行
   assert.deepEqual(report.cases[0].run_ids["baseline-tool-calling"], [RUN_BASE]);

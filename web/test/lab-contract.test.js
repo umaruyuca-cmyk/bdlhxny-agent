@@ -9,6 +9,7 @@ import assert from "node:assert/strict";
 
 const PUBLIC_PAGES = [
   ["", "index"],
+  ["home", "index"],
   ["showcase", "index"], ["showcase", "results"], ["showcase", "runs"],
   ["experiment", "index"], ["experiment", "cases"], ["experiment", "reproduce"],
   ["context", "index"], ["context", "design"], ["context", "results"],
@@ -23,13 +24,17 @@ async function readPublicPage(dir, page) {
   return readFile(new URL(rel, import.meta.url), "utf8");
 }
 
-test("/lab 登录页与批次页存在，只在此处允许表单与运行 API 调用", async () => {
-  const login = await readFile(new URL("../public/lab/login.html", import.meta.url), "utf8");
+test("/lab 批次页存在，只在此处允许表单与运行 API 调用；登录统一为公开页弹窗", async () => {
+  await assert.rejects(
+    () => readFile(new URL("../public/lab/login.html", import.meta.url)),
+    "独立登录页已删除——登录唯一入口是公开页右上角弹窗",
+  );
   const index = await readFile(new URL("../public/lab/index.html", import.meta.url), "utf8");
-  for (const html of [login, index]) {
-    assert.match(html, /\/api\/v1\//, "lab 页面需要调用运行 API");
-  }
-  assert.match(login, /sessionStorage/, "登录令牌只进 sessionStorage");
+  assert.match(index, /\/api\/v1\//, "lab 页面需要调用运行 API");
+  assert.match(index, /sessionStorage/, "登录令牌只进 sessionStorage");
+  // 未登录/会话失效/退出登录都回公告首页(/),那里有弹窗登录
+  assert.ok(index.includes('location.href = "/"'), "未登录与退出均应回到公告首页");
+  assert.ok(index.includes('href="/"'), "运行台需提供首页入口");
   assert.match(index, /case_ids/, "批次页只提交题号与实验配置");
   // 提交体只允许八个键（与 EvalBatchRequest 对齐，GT-2/GT-4/GT-8 增
   // fixture_set_id/visible_tools/search_top_k），不得夹带问题正文
@@ -62,6 +67,16 @@ test("/lab 工具可见集勾选区（GT-5）：加载目录、快捷操作与�
   }
 });
 
+test("/lab 模型接入（模型切换）：快速切换/提供商预设/Key 选填/测试连接接线", async () => {
+  const index = await readFile(new URL("../public/lab/index.html", import.meta.url), "utf8");
+  assert.match(index, /\/api\/v1\/llm-config/, "需调用配置读写端点");
+  assert.match(index, /\/api\/v1\/llm-config\/test/, "需接通连通性测试端点");
+  assert.match(index, /id="modelQuick"/, "需提供模型快速切换下拉");
+  assert.match(index, /id="llmProvider"/, "需提供提供商预设下拉");
+  assert.match(index, /id="llmApiKey" type="password"/, "密钥输入必须为 password 型(不回显)");
+  assert.match(index, /按当前账号绑定/, "需说明配置与账号绑定");
+});
+
 test("/lab 批次过程管理（任务四）：取消、预算与运行详情下钻均已接线", async () => {
   const index = await readFile(new URL("../public/lab/index.html", import.meta.url), "utf8");
   assert.match(index, /\/api\/v1\/jobs\/" \+ jobId \+ "\/cancel/, "取消按钮需调用协作取消端点");
@@ -73,10 +88,10 @@ test("/lab 批次过程管理（任务四）：取消、预算与运行详情下
   }
 });
 
-test("公开页面（/showcase、/docs）不链接 /lab、不出现后端调用", async () => {
+test("公开页面不链接 /lab(登录唯一入口是弹窗)、不出现后端调用", async () => {
   for (const [dir, page] of PUBLIC_PAGES) {
     const html = await readPublicPage(dir, page);
-    assert.ok(!html.includes('href="/lab'), `${dir || "root"}/${page}.html 不得链接私有运行台`);
+    assert.ok(!html.includes('href="/lab'), `${dir || "root"}/${page}.html 不得链接运行台(登录走弹窗)`);
     if (`${dir}/${page}` === "ops/run-api") {
       // 私有 API 的文档页:正文列出端点是职责,但不得发起任何真实调用
       assert.doesNotMatch(html, /fetch\(|XMLHttpRequest|axios/, "ops/run-api 文档页不得发起真实后端调用");
@@ -84,6 +99,25 @@ test("公开页面（/showcase、/docs）不链接 /lab、不出现后端调用"
       assert.doesNotMatch(html, /\/api\/v1\//, `${dir}/${page}.html 不得出现后端 API`);
     }
     assert.doesNotMatch(html, /<input|<form|<textarea/, `${dir}/${page}.html 不得出现输入控件`);
+  }
+});
+
+test("登录遮罩:公开页登录不跳转;宝多六花隐藏入口登录后才可见", async () => {
+  const docsJs = await readFile(new URL("../public/docs/docs.js", import.meta.url), "utf8");
+  assert.match(docsJs, /\/api\/v1\/login/, "遮罩登录需调用登录端点");
+  assert.match(docsJs, /preventDefault/, "点击登录不得跳转页面");
+  assert.match(docsJs, /lab_token/, "成功后写入会话令牌");
+  assert.match(docsJs, /topbar-home/, "登录后显示隐藏入口");
+  assert.match(docsJs, /发起对照批次/, "登录入口需写明登录后可执行的操作");
+  assert.match(docsJs, /\/api\/v1\/logout/, "顶栏需提供退出登录并调用注销端点");
+  assert.match(docsJs, /topbar-logout/, "登录后显示退出登录按钮");
+  assert.match(docsJs, /location\.href = "\/"/, "登录成功后自动回到公告页");
+  const css = await readFile(new URL("../public/docs/docs.css", import.meta.url), "utf8");
+  assert.match(css, /\.topbar-home\s*\{[^}]*display:\s*none/, "隐藏入口默认不可见");
+  // 遮罩表单由共享脚本运行时注入,公开页 HTML 源保持零输入控件
+  for (const [dir, page] of PUBLIC_PAGES) {
+    const html = await readPublicPage(dir, page);
+    assert.doesNotMatch(html, /<input|<textarea/, `${dir || "root"}/${page}.html HTML 源不得出现输入控件`);
   }
 });
 

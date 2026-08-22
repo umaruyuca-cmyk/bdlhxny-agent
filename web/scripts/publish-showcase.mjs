@@ -281,7 +281,8 @@ function projectBatchReport(artifact, batchId, gitCommit, publishedRuns) {
   const groups = Object.entries(artifact.groups ?? {})
     .filter(([source]) => GROUP_KEYS[source])
     .map(([source, metrics]) => {
-      const projected = { task_success_rate: num(metrics.tool_selection_rate) };
+      // task_success_rate 诚实口径:任务成功率判定未实现,不以工具选择率冒充(v1 行为)
+      const projected = { task_success_rate: null };
       for (const field of METRIC_FIELDS) projected[field] = num(metrics[field]);
       return {
         key: GROUP_KEYS[source].key,

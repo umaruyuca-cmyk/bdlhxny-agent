@@ -3,6 +3,8 @@ export const REDIRECTS = new Map([
   ["/docs", "/"],
   ["/docs/", "/"],
   ["/docs/index", "/"],
+  ["/announce", "/"],
+  ["/announce/", "/"],
   ["/docs/comparison", "/experiment/"],
   ["/docs/cases", "/experiment/cases"],
   ["/docs/eval", "/judging/"],

@@ -1,4 +1,4 @@
-/* Touchstone 实证层共享渲染函数（纯函数，无 DOM 依赖，可被 Node 测试加载）。
+/* 展示层共享渲染函数（纯函数，无 DOM 依赖，可被 Node 测试加载）。
  * 约定：null 一律渲染为「未运行」；未过有效门槛的批次不做结论性文案。 */
 (function (global) {
   "use strict";
