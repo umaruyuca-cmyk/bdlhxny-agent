@@ -294,6 +294,10 @@ class ToolCard(BaseModel):
     read_only: bool = True
     required_scope: list[str] = Field(default_factory=list)
     cost_hint: CostHint = CostHint.NORMAL
+    # GT-6 评测轴标注(判官 GT-7 消费;治理轴 read_only 不变)
+    side_effect: str = "none"
+    requires_confirmation: bool = False
+    risk_level: str = "low"
 
     def manifest(self) -> dict[str, Any]:
         """面向模型 bind_tools 的描述（不含治理与路由细节）。"""
@@ -389,6 +393,9 @@ def _card_from_spec(spec: CapabilitySpec) -> ToolCard:
         read_only=True,  # CapabilityRegistry 只登记只读能力（register 已守卫）
         required_scope=scopes,
         cost_hint=_cost_hint_for(spec.name),
+        side_effect=spec.side_effect,
+        requires_confirmation=spec.requires_confirmation,
+        risk_level=spec.risk_level,
     )
 
 

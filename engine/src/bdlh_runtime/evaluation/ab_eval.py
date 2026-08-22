@@ -31,6 +31,7 @@ from typing import Any
 
 from langchain_core.messages import AIMessage
 
+from bdlh_runtime.context import ConservativeTokenCounter
 from bdlh_runtime.data_client import DataClient
 from bdlh_runtime.engine.loop import AgentLoop, AgentResult, AgentTurn, load_prompt
 from bdlh_runtime.engine.output_guardrail import (
@@ -85,6 +86,14 @@ class ABCase:
     fastpath: str | None = None
     expected_tools: tuple[str, ...] = ()
     absent_tools: tuple[str, ...] = ()
+    # GT-7 金标扩展(expected_checks 新键;缺省 None=不参与对应指标分母):
+    # expected_params 工具→期望参数值;expected_order 多步金标调用序;
+    # expected_search {"needed":bool,"gold_tools":[...]};confirmation_present
+    # 用例上下文是否已给出写入确认
+    expected_params: dict[str, dict[str, Any]] | None = None
+    expected_order: tuple[str, ...] | None = None
+    expected_search: dict[str, Any] | None = None
+    confirmation_present: bool | None = None
     # 用例版本与真实变体/快照标识(来自 data 服务,运行记录据此关联
     # case_variants / data_snapshots,不再本地拼接)
     case_version: int = 1
@@ -106,15 +115,31 @@ def _default_variant(view: dict[str, Any]) -> dict[str, Any]:
     raise ValueError(f"case {view.get('id')} 没有 default 变体")
 
 
+#: expected_checks 已知金标键(种子/ctx 用例/GT-3/GT-7);未知键告警不拒收。
+_KNOWN_CHECK_KEYS = frozenset(
+    {
+        "category", "expected_tools", "absent_tools", "fastpath",
+        "forbidden_actions", "forbidden_facts", "required_context",
+        "context_expectations", "fixture_only", "expected_behavior",
+        "expected_params", "expected_order", "expected_search", "confirmation_present",
+    }
+)
+
+
 def load_cases(views: list[dict[str, Any]]) -> list[ABCase]:
     """把 data 服务返回的固定用例目录转换为执行用例。
 
     多步用例（case_steps）中除最后一步外的消息作为 history 回放；
     ``role=assistant_fixture`` 的步骤按 assistant 消息处理。
+    GT-7:expected_checks 的 expected_params/expected_order/expected_search/
+    confirmation_present 解析进用例;未知金标键告警(向前兼容旧用例)。
     """
     cases: list[ABCase] = []
     for view in views:
         checks = view.get("expectedChecks") or {}
+        unknown = sorted(set(checks) - _KNOWN_CHECK_KEYS)
+        if unknown:
+            print(f"  [load_cases] case {view.get('id')} expected_checks 含未知键(忽略): {unknown}")
         steps = view.get("steps") or []
         history = tuple(
             {
@@ -125,6 +150,10 @@ def load_cases(views: list[dict[str, Any]]) -> list[ABCase]:
         )
         fastpath = checks.get("fastpath")
         variant = _default_variant(view)
+        expected_params = checks.get("expected_params")
+        expected_order = checks.get("expected_order")
+        expected_search = checks.get("expected_search")
+        confirmation = checks.get("confirmation_present")
         cases.append(
             ABCase(
                 id=str(view["id"]),
@@ -136,6 +165,10 @@ def load_cases(views: list[dict[str, Any]]) -> list[ABCase]:
                 fastpath=fastpath if isinstance(fastpath, str) and fastpath else None,
                 expected_tools=tuple(checks.get("expected_tools") or ()),
                 absent_tools=tuple(checks.get("absent_tools") or ()),
+                expected_params=dict(expected_params) if isinstance(expected_params, dict) else None,
+                expected_order=tuple(expected_order) if isinstance(expected_order, list) else None,
+                expected_search=dict(expected_search) if isinstance(expected_search, dict) else None,
+                confirmation_present=bool(confirmation) if confirmation is not None else None,
                 case_version=int(view.get("version") or 1),
                 variant_id=str(variant.get("variantId") or "default"),
                 snapshot_id=str(variant.get("snapshotId") or ""),
@@ -198,6 +231,28 @@ class RunJudgment:
     hallucinated_tools: list[str] = field(default_factory=list)
     invisible_tools: list[str] = field(default_factory=list)
     forbidden_leak: list[str] = field(default_factory=list)
+    # GT-7 通用目录专项(全部 None 安全:金标/调用缺失不进分母)
+    # 选择组(基于成功集合 S 与金标集合 G)
+    selection_precision: float | None = None
+    selection_recall: float | None = None
+    missed_gold: bool = False
+    extra_calls: bool = False
+    forbidden_attempts: list[str] = field(default_factory=list)  # 尝试口径(泄漏为执行口径)
+    # 参数与流程组(分母=进入执行器的调用)
+    params_complete_rate: float | None = None
+    params_type_valid_rate: float | None = None
+    params_factual_rate: float | None = None
+    duplicate_call: bool = False
+    order_correct: bool | None = None
+    # 权限与确认组(v1 只判不拦)
+    unconfirmed_write: bool = False
+    write_for_query: bool = False
+    # 检索组(v1 按调用记录近似,明细消费见修订记录)
+    search_hit: bool | None = None
+    invalid_search: bool = False
+    duplicate_search: bool = False
+    search_then_correct: bool | None = None
+    tools_schema_tokens: int = 0
     # 答案层
     number_hallucinations: list[str] = field(default_factory=list)
     c1_violations: list[str] = field(default_factory=list)
@@ -255,6 +310,24 @@ class GroupSummary:
     valid_runs: int = 0
     invalid_runs: int = 0
     invalid_reasons: dict[str, int] = field(default_factory=dict)
+    # GT-7 通用目录专项聚合(None=该组无对应金标/调用,不进分母)
+    selection_precision_mean: float | None = None
+    selection_recall_mean: float | None = None
+    missed_rate: float = 0.0
+    extra_call_rate: float = 0.0
+    forbidden_attempt_rate: float = 0.0
+    params_complete_rate: float | None = None
+    params_type_valid_rate: float | None = None
+    params_factual_rate: float | None = None
+    duplicate_call_rate: float = 0.0
+    order_correct_rate: float | None = None
+    unconfirmed_write_rate: float = 0.0
+    write_for_query_rate: float = 0.0
+    search_hit_rate: float | None = None
+    invalid_search_rate: float = 0.0
+    duplicate_search_rate: float = 0.0
+    search_then_correct_rate: float | None = None
+    mean_tools_schema_tokens: int = 0
 
 
 @dataclass
@@ -377,15 +450,128 @@ async def run_treatment(
 _number_check = NumberGroundingCheck()
 _c1_check = C1ComplianceCheck()
 _c2_check = C2ComplianceCheck()
+_token_counter = ConservativeTokenCounter()
+
+
+def _schema_tokens(cards: list[Any]) -> int:
+    """当轮可见工具定义 token 估算:序列化(name+description+parameters)后计数。"""
+    payload = json.dumps(
+        [{"name": c.name, "description": c.description, "parameters": c.parameters} for c in cards],
+        ensure_ascii=False,
+        default=str,
+    )
+    return _token_counter.count(payload)
+
+
+def _args_valid_against_schema(arguments: dict[str, Any], parameters: dict[str, Any]) -> bool:
+    """参数过 JSON Schema(校验目标=当轮发给模型的 ToolCard.parameters)。"""
+    import jsonschema
+
+    try:
+        jsonschema.validate(instance=arguments, schema=parameters)
+        return True
+    except jsonschema.exceptions.ValidationError:
+        return False
+    except Exception:  # noqa: BLE001 —— schema 自身异常按不通过计,不抛出
+        return False
+
+
+def _apply_generic_metrics(
+    j: RunJudgment,
+    *,
+    case: ABCase,
+    call_seq: list[tuple[str, dict[str, Any]]],
+    attempted: set[str],
+    successful: set[str],
+    cards: dict[str, Any],
+    tool_correct: bool,
+) -> None:
+    """GT-7 通用目录专项:选择/参数流程/权限确认/检索四组指标(三组判官共用)。
+
+    口径(见修订记录 2026-08-22(十)):S=成功集合,G=金标集合;参数组分母=
+    进入执行器的调用(call_seq);检索组 v1 按调用记录近似(search_tools 的
+    dispatch 在执行器之前,返回明细不进 call_log);写入判定用 side_effect≠none
+    (评测轴,引擎只判不拦)。
+    """
+    gold = set(case.expected_tools)
+
+    # 选择组
+    if gold:
+        if successful:
+            j.selection_precision = len(successful & gold) / len(successful)
+        j.selection_recall = len(successful & gold) / len(gold)
+        j.missed_gold = j.selection_recall < 1
+        j.extra_calls = bool(successful - gold)
+    j.forbidden_attempts = sorted(attempted & set(case.absent_tools))
+
+    # 参数与流程组(分母=有实参记录的调用)
+    if call_seq:
+        complete = 0
+        type_valid = 0
+        factual_total = 0
+        factual_ok = 0
+        seen: dict[tuple[str, str], int] = {}
+        for name, args in call_seq:
+            card = cards.get(name)
+            if card is not None:
+                required = list((card.parameters or {}).get("required") or [])
+                if all(key in (args or {}) for key in required):
+                    complete += 1
+                if _args_valid_against_schema(dict(args or {}), card.parameters or {"type": "object"}):
+                    type_valid += 1
+            if case.expected_params and name in case.expected_params:
+                factual_total += 1
+                want = case.expected_params[name]
+                if all((args or {}).get(k) == v for k, v in want.items()):
+                    factual_ok += 1
+            key = (name, json.dumps(args or {}, sort_keys=True, ensure_ascii=False, default=str))
+            seen[key] = seen.get(key, 0) + 1
+        n_calls = len(call_seq)
+        j.params_complete_rate = complete / n_calls
+        j.params_type_valid_rate = type_valid / n_calls
+        if factual_total:
+            j.params_factual_rate = factual_ok / factual_total
+        j.duplicate_call = any(count > 1 for count in seen.values())
+    if case.expected_order:
+        order_gold = list(case.expected_order)
+        in_gold = set(order_gold)
+        filtered = [name for name, _ in call_seq if name in in_gold]
+        j.order_correct = filtered == order_gold
+
+    # 权限与确认组(v1 只判不拦:side_effect≠none 即写入类)
+    write_tools = {name for name, card in cards.items() if getattr(card, "side_effect", "none") != "none"}
+    write_calls = {name for name, _ in call_seq} & write_tools
+    if write_calls and case.confirmation_present is not True:
+        j.unconfirmed_write = True
+    if gold and not (gold & write_tools) and (successful & write_tools):
+        j.write_for_query = True
+
+    # 检索组(v1 近似:命中=gold_tools ⊆ 成功集合;检索后选择准确=检索过且金标对)
+    search_calls = [name for name, _ in call_seq if name == "search_tools"]
+    search_needed = bool(case.expected_search and case.expected_search.get("needed"))
+    if search_calls and not search_needed:
+        j.invalid_search = True
+    j.duplicate_search = len(search_calls) > 1
+    gold_search = set((case.expected_search or {}).get("gold_tools") or ())
+    if gold_search:
+        if search_calls:
+            j.search_hit = gold_search <= successful
+            j.search_then_correct = tool_correct
+        else:
+            j.search_hit = False
+            j.search_then_correct = False
+    elif search_calls:
+        j.search_then_correct = tool_correct
 
 
 def _judge_baseline(
     case: ABCase,
     result: BaselineResult,
     executor: Any,
-    catalog_names: set[str],
+    cards: dict[str, Any],
     visible_names: frozenset[str],
 ) -> RunJudgment:
+    catalog_names = set(cards)
     j = RunJudgment(error=result.error)
     actual_tools = {name for name, _ in executor.call_log}
     j.hallucinated_tools = sorted(actual_tools - catalog_names)
@@ -395,6 +581,15 @@ def _judge_baseline(
         j.tool_correct = len(actual_tools) == 0
     else:
         j.tool_correct = actual_tools == set(case.expected_tools)
+    _apply_generic_metrics(
+        j,
+        case=case,
+        call_seq=list(executor.call_log),
+        attempted=actual_tools,
+        successful=actual_tools,
+        cards=cards,
+        tool_correct=j.tool_correct,
+    )
     j.rounds = result.rounds
     j.prompt_tokens = result.prompt_tokens
     j.completion_tokens = result.completion_tokens
@@ -412,13 +607,14 @@ def _judge_react(
     case: ABCase,
     result: BaselineResult,
     executor: FrozenToolExecutor,
-    catalog_names: set[str],
+    cards: dict[str, Any],
     visible_names: frozenset[str],
 ) -> RunJudgment:
     """B2 判定：attempted 取模型实际发起的 tool_calls（ToolNode 拦截的幻觉尝试不丢失），
     executed 取 executor 日志（越权泄漏按实际执行计）。"""
     j = RunJudgment(error=result.error)
     attempted = set(result.attempted_tools)
+    catalog_names = set(cards)
     executed = {name for name, _ in executor.call_log}
     j.hallucinated_tools = sorted(attempted - catalog_names)
     j.invisible_tools = sorted((attempted - visible_names) & catalog_names)
@@ -427,6 +623,15 @@ def _judge_react(
         j.tool_correct = not attempted
     else:
         j.tool_correct = attempted == set(case.expected_tools)
+    _apply_generic_metrics(
+        j,
+        case=case,
+        call_seq=list(executor.call_log),
+        attempted=attempted,
+        successful=executed,
+        cards=cards,
+        tool_correct=j.tool_correct,
+    )
     j.rounds = result.rounds
     j.prompt_tokens = result.prompt_tokens
     j.completion_tokens = result.completion_tokens
@@ -444,9 +649,10 @@ def _judge_treatment(
     agent_result: AgentResult,
     guard_report: Any,
     executor: Any,
-    catalog_names: set[str],
+    cards: dict[str, Any],
     visible_names: frozenset[str],
 ) -> RunJudgment:
+    catalog_names = set(cards)
     j = RunJudgment()
     successful = {a.tool_name for a in agent_result.audits if a.status == "SUCCESS"}
     blocked = {a.tool_name for a in agent_result.audits if a.status != "SUCCESS"}
@@ -458,6 +664,16 @@ def _judge_treatment(
         j.tool_correct = agent_result.fastpath_name == case.fastpath and not agent_result.entered_loop
     else:
         j.tool_correct = successful == set(case.expected_tools)
+    # 完整模式参数组:被 G1 拒绝的调用无实参记录,分母=进入执行器的调用(见修订记录)
+    _apply_generic_metrics(
+        j,
+        case=case,
+        call_seq=list(executor.call_log),
+        attempted=all_attempted,
+        successful=successful,
+        cards=cards,
+        tool_correct=j.tool_correct,
+    )
     j.rounds = _count_rounds(agent_result.messages)
     p, c, estimated = _extract_treatment_tokens(agent_result)
     j.prompt_tokens = p
@@ -476,9 +692,14 @@ def _judge_treatment(
 # ── 聚合 ────────────────────────────────────────────────────────────────
 
 
+def _mean(values: list[float]) -> float | None:
+    """None 安全均值:空列表(无金标/无调用)返回 None,不进分母。"""
+    return sum(values) / len(values) if values else None
+
+
 def _summarize(runs: list[RunJudgment]) -> GroupSummary:
     """聚合口径(任务一):只有 VALID 运行进入分母;INVALID(429/余额/服务不可用)
-    单列数量与原因分组,不冒充失败样本。"""
+    单列数量与原因分组,不冒充失败样本。GT-7 专项聚合 None 安全。"""
 
     valid = [r for r in runs if r.validity != "INVALID"]
     invalid = [r for r in runs if r.validity == "INVALID"]
@@ -493,6 +714,14 @@ def _summarize(runs: list[RunJudgment]) -> GroupSummary:
         )
     durations = sorted(r.duration_ms for r in valid)
     p95_index = max(0, min(n - 1, (95 * n + 99) // 100 - 1))
+    precision_values = [r.selection_precision for r in valid if r.selection_precision is not None]
+    recall_values = [r.selection_recall for r in valid if r.selection_recall is not None]
+    complete_values = [r.params_complete_rate for r in valid if r.params_complete_rate is not None]
+    type_values = [r.params_type_valid_rate for r in valid if r.params_type_valid_rate is not None]
+    factual_values = [r.params_factual_rate for r in valid if r.params_factual_rate is not None]
+    order_values = [r.order_correct for r in valid if r.order_correct is not None]
+    hit_values = [r.search_hit for r in valid if r.search_hit is not None]
+    search_correct_values = [r.search_then_correct for r in valid if r.search_then_correct is not None]
     return GroupSummary(
         tool_selection_rate=sum(1 for r in valid if r.tool_correct) / n,
         hallucination_rate=sum(1 for r in valid if r.hallucinated_tools) / n,
@@ -510,6 +739,27 @@ def _summarize(runs: list[RunJudgment]) -> GroupSummary:
         valid_runs=n,
         invalid_runs=len(invalid),
         invalid_reasons=reasons,
+        selection_precision_mean=_mean(precision_values),
+        selection_recall_mean=_mean(recall_values),
+        missed_rate=sum(1 for r in valid if r.missed_gold) / n,
+        extra_call_rate=sum(1 for r in valid if r.extra_calls) / n,
+        forbidden_attempt_rate=sum(1 for r in valid if r.forbidden_attempts) / n,
+        params_complete_rate=_mean(complete_values),
+        params_type_valid_rate=_mean(type_values),
+        params_factual_rate=_mean(factual_values),
+        duplicate_call_rate=sum(1 for r in valid if r.duplicate_call) / n,
+        order_correct_rate=(sum(1 for v in order_values if v) / len(order_values)) if order_values else None,
+        unconfirmed_write_rate=sum(1 for r in valid if r.unconfirmed_write) / n,
+        write_for_query_rate=sum(1 for r in valid if r.write_for_query) / n,
+        search_hit_rate=(sum(1 for v in hit_values if v) / len(hit_values)) if hit_values else None,
+        invalid_search_rate=sum(1 for r in valid if r.invalid_search) / n,
+        duplicate_search_rate=sum(1 for r in valid if r.duplicate_search) / n,
+        search_then_correct_rate=(
+            (sum(1 for v in search_correct_values if v) / len(search_correct_values))
+            if search_correct_values
+            else None
+        ),
+        mean_tools_schema_tokens=sum(r.tools_schema_tokens for r in valid) // n,
     )
 
 
@@ -663,7 +913,7 @@ async def run_ab_eval(
         data = DataClient()
         catalog = catalog_from_snapshot(load_and_validate_payload(data.get_tool_catalog()))
         frozen = FrozenObservations(data.get_tool_fixtures(fixture_set_id))
-    catalog_names = {c.name for c in catalog.list()}
+    cards = {c.name: c for c in catalog.list()}
     all_cards = [c for c in catalog.list() if c.name != "search_tools"]
     # GT-4 可见集过滤:None=按场景默认;[] 为显式空集(能力缺口实验,
     # 与 None 严格区分——GT-5 勾选页依赖该区分);三组同规则,单一变量纪律。
@@ -744,7 +994,8 @@ async def run_ab_eval(
                     continue
                 break
             b_recorder.mark_judgment_started()
-            b_judgment = _judge_baseline(case, b_result, b_exec, catalog_names, baseline_visible)
+            b_judgment = _judge_baseline(case, b_result, b_exec, cards, baseline_visible)
+            b_judgment.tools_schema_tokens = _schema_tokens(all_cards)
             b_judgment.duration_ms = round((time.perf_counter() - b_started) * 1000)
             _finalize_run(b_recorder, b_judgment, answer=b_result.answer or "", prompt_hash=baseline_prompt_hash)
             cr.baseline_runs.append(b_judgment)
@@ -774,7 +1025,8 @@ async def run_ab_eval(
                     continue
                 break
             r_recorder.mark_judgment_started()
-            r_judgment = _judge_react(case, r_result, r_exec, catalog_names, baseline_visible)
+            r_judgment = _judge_react(case, r_result, r_exec, cards, baseline_visible)
+            r_judgment.tools_schema_tokens = _schema_tokens(all_cards)
             r_judgment.duration_ms = round((time.perf_counter() - r_started) * 1000)
             _finalize_run(r_recorder, r_judgment, answer=r_result.answer or "", prompt_hash=baseline_prompt_hash)
             cr.react_runs.append(r_judgment)
@@ -831,8 +1083,11 @@ async def run_ab_eval(
                 t_result,
                 t_guard,
                 t_exec,
-                catalog_names,
+                cards,
                 frozenset(t_result.loaded_tools),
+            )
+            t_judgment.tools_schema_tokens = _schema_tokens(
+                [catalog.get(name) for name in t_result.loaded_tools if catalog.get(name) is not None]
             )
             t_judgment.duration_ms = round((time.perf_counter() - t_started) * 1000)
             _finalize_run(
@@ -1084,6 +1339,50 @@ def render_markdown(report: ABReport) -> str:
         f"| Output Guardrail | 数字幻觉 {_pct(b.number_hallucination_rate)}→{_pct(t.number_hallucination_rate)} + C-1 {_pct(b.c1_violation_rate)}→{_pct(t.c1_violation_rate)} + C-2 {_pct(b.c2_violation_rate)}→{_pct(t.c2_violation_rate)} |",
         f"| Selective Loading + Fast-Path | 轮次 {b.mean_rounds:.1f}→{t.mean_rounds:.1f} + token {_token_pct(b.mean_tokens, t.mean_tokens)} |",
     ]
+
+    # GT-7 通用目录专项(None 显示"—":该组无对应金标/调用,不进分母)
+    def _cell(group: GroupSummary | None, key: str, *, pct: bool = True) -> str:
+        if group is None:
+            return "—"
+        value = getattr(group, key)
+        if value is None:
+            return "—"
+        return _pct(value) if pct else str(value)
+
+    def _row(label: str, key: str, *, pct: bool = True) -> str:
+        groups = [b, t] if not has_react else [b, r, t]
+        cells = " | ".join(_cell(g, key, pct=pct) for g in groups)
+        return f"| {label} | {cells} |"
+
+    generic_keys = [
+        ("选择精确率", "selection_precision_mean", True),
+        ("选择召回率", "selection_recall_mean", True),
+        ("漏选率", "missed_rate", True),
+        ("多余调用率", "extra_call_rate", True),
+        ("禁止尝试率", "forbidden_attempt_rate", True),
+        ("参数完整率", "params_complete_rate", True),
+        ("参数类型正确率", "params_type_valid_rate", True),
+        ("参数事实一致率", "params_factual_rate", True),
+        ("重复调用率", "duplicate_call_rate", True),
+        ("顺序正确率", "order_correct_rate", True),
+        ("未确认写入率(只判不拦)", "unconfirmed_write_rate", True),
+        ("查询误用写入率", "write_for_query_rate", True),
+        ("检索命中率(v1 近似)", "search_hit_rate", True),
+        ("无效检索率", "invalid_search_rate", True),
+        ("重复检索率", "duplicate_search_rate", True),
+        ("检索后选择准确率", "search_then_correct_rate", True),
+        ("工具定义 token(均值)", "mean_tools_schema_tokens", False),
+    ]
+    lines += [
+        "",
+        "## 通用目录专项（GT-7，「—」=该组无对应金标/调用）",
+        "",
+    ]
+    if has_react:
+        lines += ["| 指标 | 裸 tool calling | LangGraph 官方 ReAct | 完整工程模式 |", "|---|---:|---:|---:|"]
+    else:
+        lines += ["| 指标 | 裸 tool calling | 完整工程模式 |", "|---|---:|---:|"]
+    lines.extend(_row(label, key, pct=pct) for label, key, pct in generic_keys)
     if has_react:
         lines += [
             "",
@@ -1190,6 +1489,12 @@ def _agg_runs(runs: list[RunJudgment]) -> dict[str, Any]:
         "correct": sum(1 for r in valid if r.tool_correct),
         "hallucinated": sum(1 for r in valid if r.hallucinated_tools or r.forbidden_leak),
         "invisible": sum(1 for r in valid if r.invisible_tools),
+        "missed_gold": sum(1 for r in valid if r.missed_gold),
+        "extra_calls": sum(1 for r in valid if r.extra_calls),
+        "duplicate_call": sum(1 for r in valid if r.duplicate_call),
+        "unconfirmed_write": sum(1 for r in valid if r.unconfirmed_write),
+        "write_for_query": sum(1 for r in valid if r.write_for_query),
+        "invalid_search": sum(1 for r in valid if r.invalid_search),
         "total": len(runs),
         "valid": len(valid),
         "invalid": len(invalid),
