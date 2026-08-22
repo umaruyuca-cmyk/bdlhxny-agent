@@ -132,6 +132,7 @@ class AgentLoop:
         tool_loading: str = "scoped",
         encoder: Encoder | None = None,
         context_builder: ContextBuilder | None = None,
+        visible_override: frozenset[str] | None = None,
     ) -> None:
         self._llm = llm
         self._catalog = catalog
@@ -141,6 +142,9 @@ class AgentLoop:
         self._session_history_turns = max(1, session_history_turns)
         self._max_tool_calls = max(0, max_tool_calls)
         self._context_builder = context_builder or ContextBuilder(counter=ConservativeTokenCounter())
+        # GT-4 可见集覆盖:最终可见集 = 装载策略结果 ∩ override(None=不覆盖)。
+        # loaded_names 按交集生成,G1 据此拦截被勾掉的工具(拒绝+审计码)。
+        self._visible_override = visible_override
 
     async def run(self, turn: AgentTurn, *, stream: StreamSink | None = None) -> AgentResult:
         if self._router is not None:
@@ -208,6 +212,8 @@ class AgentLoop:
 
         for _ in range(max_rounds):
             cards = self._loader.load_for_turn(turn.scene_tag, authenticated=turn.authenticated)
+            if self._visible_override is not None:
+                cards = [card for card in cards if card.name in self._visible_override]
             loaded_names = tuple(card.name for card in cards)
             granted = self._loader.granted_scopes(turn.scene_tag, authenticated=turn.authenticated)
             bound = self._llm.bind_tools([_tool_spec(card) for card in cards])

@@ -104,6 +104,10 @@ class EvalBatchRequest(BaseModel):
         max_length=100,
         description="冻结数据集(GT-2);缺省 ab-eval;负例集 ab-eval-negative-v1,通用集 mock-eval-v1",
     )
+    visible_tools: list[str] | None = Field(
+        default=None,
+        description="工具可见集(GT-4):null=按场景默认;空列表视为 null;元素必须属于工具目录",
+    )
 
 
 class LoginRequest(BaseModel):
@@ -177,6 +181,26 @@ def list_cases(account: Annotated[dict[str, Any], Depends(require_login)]) -> li
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
+@app.get("/api/v1/tools")
+def list_tools(account: Annotated[dict[str, Any], Depends(require_login)]) -> list[dict[str, Any]]:
+    """工具目录(/lab 勾选页数据源,GT-4):代理 data 服务目录的 capabilities 段。"""
+    try:
+        payload = _data().get_tool_catalog()
+    except DataServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    tools: list[dict[str, Any]] = []
+    for item in payload.get("capabilities") or []:
+        tools.append(
+            {
+                "name": str(item.get("name") or ""),
+                "description": str(item.get("description") or ""),
+                "domain": str(item.get("domain") or ""),
+                "enabled": bool(item.get("enabled", True)),
+            }
+        )
+    return tools
+
+
 @app.post("/api/v1/eval-batches")
 def start_eval_batch(
     request: EvalBatchRequest,
@@ -189,6 +213,7 @@ def start_eval_batch(
         unknown = [case_id for case_id in request.case_ids or [] if case_id not in known]
         if unknown:
             raise HTTPException(status_code=400, detail=f"未知 case_id：{unknown}")
+        _validate_visible_tools(data, request.visible_tools)
         if not _BATCH_SLOTS.acquire(blocking=False):
             raise HTTPException(status_code=429, detail="已有评测批次在运行，请等待完成后再发起")
         batch_id = data.create_batch(
@@ -204,6 +229,7 @@ def start_eval_batch(
                 "interleaveSeed": DEFAULT_INTERLEAVE_SEED,
                 "maxTotalTokens": _max_total_tokens(request),
                 "fixtureSetId": request.fixture_set_id or "ab-eval",
+                "visibleTools": request.visible_tools or None,
             },
         )
     except DataServiceError as exc:
@@ -374,6 +400,7 @@ def _execute_eval(
             should_stop=(lambda: bool(job.get("cancel_requested"))) if job is not None else None,
             max_total_tokens=_max_total_tokens(request),
             fixture_set_id=request.fixture_set_id or "ab-eval",
+            visible_tools=request.visible_tools or None,
         )
 
     report = asyncio.run(run())
@@ -386,6 +413,26 @@ def _max_total_tokens(request: EvalBatchRequest | ContextBatchRequest) -> int | 
         return requested
     raw = os.getenv("EVAL_MAX_TOTAL_TOKENS", "").strip()
     return int(raw) if raw.isdigit() else None
+
+
+def _validate_visible_tools(data: DataClient, visible_tools: list[str] | None) -> None:
+    """GT-4 可见集校验:元素必须 ⊆ 工具目录(含 search_tools);未知名 → 400。
+
+    空列表视为 null(等同场景默认),不进入比对。
+    """
+    names = [name for name in (visible_tools or []) if name]
+    if not names:
+        return
+    try:
+        payload = data.get_tool_catalog()
+    except DataServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    known = {str(item.get("name")) for item in payload.get("capabilities") or []}
+    if "search_tools" in names:
+        known = known | {"search_tools"}
+    unknown = [name for name in names if name not in known]
+    if unknown:
+        raise HTTPException(status_code=400, detail=f"未知工具名：{sorted(set(unknown))}")
 
 
 def _execute_context_eval(

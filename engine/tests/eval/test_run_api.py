@@ -57,8 +57,7 @@ class FakeDataClient:
         self.saved_context_builds.append((run_id, build))
 
     def list_cases(self) -> list[dict[str, Any]]:
-        return [
-            {
+        return [            {
                 "id": "research-01",
                 "version": 1,
                 "title": "实时行情工具选择",
@@ -107,6 +106,31 @@ class FakeDataClient:
                 ],
             },
         ]
+
+    def get_tool_catalog(self) -> dict[str, Any]:
+        """最小目录 payload(与 data 服务 /tool-catalog 同构;GT-4 校验与端点消费)。"""
+        return {
+            "operations": [{"code": "READ_MARKET_DATA", "description": "读取公开市场数据"}],
+            "toolsets": [{"name": "market_read", "description": "行情读取"}],
+            "capabilities": [
+                {
+                    "name": name,
+                    "description": f"{name} description",
+                    "domain": name.split(".")[0],
+                    "adapter": "mcp",
+                    "read_only": True,
+                    "requires_authenticated_user": False,
+                    "required_arguments": ["symbol"],
+                    "depends_on": [],
+                    "timeout_seconds": 20,
+                    "enabled": True,
+                    "operations": ["READ_MARKET_DATA"],
+                    "toolsets": ["market_read"],
+                }
+                for name in ("market.get_realtime_quote", "market.get_valuation", "market.get_news")
+            ],
+            "skills": [],
+        }
 
     def create_batch(self, **_: Any) -> str:
         return "batch-1"
