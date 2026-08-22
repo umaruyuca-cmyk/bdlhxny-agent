@@ -1,0 +1,1187 @@
+{
+ "tools": [
+  {
+   "name": "web.search",
+   "args": [
+    "query"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "web.open",
+   "args": [
+    "url"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "web.find",
+   "args": [
+    "url",
+    "pattern"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "web.extract",
+   "args": [
+    "url",
+    "fields"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "web.compare_sources",
+   "args": [
+    "urls",
+    "question"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "web.check_freshness",
+   "args": [
+    "url"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "file.search",
+   "args": [
+    "query",
+    "folder"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "file.read",
+   "args": [
+    "path"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "file.list",
+   "args": [
+    "folder"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "file.extract_text",
+   "args": [
+    "path"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "document.summarize",
+   "args": [
+    "path",
+    "focus"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "document.compare",
+   "args": [
+    "paths",
+    "criteria"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "drive.search",
+   "args": [
+    "query"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "drive.list_folder",
+   "args": [
+    "folder_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "drive.get_metadata",
+   "args": [
+    "file_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "knowledge.search",
+   "args": [
+    "query",
+    "collection"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "knowledge.get_record",
+   "args": [
+    "record_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "mail.search",
+   "args": [
+    "query",
+    "mailbox"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "mail.read",
+   "args": [
+    "message_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "mail.draft",
+   "args": [
+    "to",
+    "subject",
+    "body"
+   ],
+   "op": "WRITE_COMMUNICATION",
+   "auth": true,
+   "side_effect": "write",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "mail.send",
+   "args": [
+    "to",
+    "subject",
+    "body"
+   ],
+   "op": "WRITE_COMMUNICATION",
+   "auth": true,
+   "side_effect": "external_action",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  },
+  {
+   "name": "message.search",
+   "args": [
+    "query",
+    "channel"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "message.send",
+   "args": [
+    "channel",
+    "recipients",
+    "body"
+   ],
+   "op": "WRITE_COMMUNICATION",
+   "auth": true,
+   "side_effect": "external_action",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  },
+  {
+   "name": "calendar.list_events",
+   "args": [
+    "start",
+    "end"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "calendar.find_availability",
+   "args": [
+    "participants",
+    "duration"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "calendar.create_event",
+   "args": [
+    "title",
+    "start",
+    "end",
+    "participants"
+   ],
+   "op": "WRITE_SCHEDULE",
+   "auth": true,
+   "side_effect": "write",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  },
+  {
+   "name": "task.list",
+   "args": [
+    "status",
+    "project"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "task.create",
+   "args": [
+    "title",
+    "due_at",
+    "assignee"
+   ],
+   "op": "WRITE_SCHEDULE",
+   "auth": true,
+   "side_effect": "write",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "project.get_status",
+   "args": [
+    "project_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "spreadsheet.read_range",
+   "args": [
+    "file_id",
+    "sheet",
+    "range"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "spreadsheet.find_rows",
+   "args": [
+    "file_id",
+    "conditions"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "spreadsheet.calculate",
+   "args": [
+    "file_id",
+    "expression"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "spreadsheet.create_chart",
+   "args": [
+    "file_id",
+    "range",
+    "chart_type"
+   ],
+   "op": "WRITE_FILE",
+   "auth": true,
+   "side_effect": "write",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "data.transform",
+   "args": [
+    "input_ref",
+    "operations"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "data.export",
+   "args": [
+    "input_ref",
+    "format"
+   ],
+   "op": "WRITE_FILE",
+   "auth": true,
+   "side_effect": "write",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "database.list_tables",
+   "args": [
+    "connection_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "database.describe_table",
+   "args": [
+    "connection_id",
+    "table"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "database.query",
+   "args": [
+    "connection_id",
+    "sql"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "metrics.get",
+   "args": [
+    "metric_names",
+    "period"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "dashboard.get",
+   "args": [
+    "dashboard_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "code.search",
+   "args": [
+    "query",
+    "repository"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "code.read",
+   "args": [
+    "path",
+    "start_line",
+    "end_line"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "code.execute",
+   "args": [
+    "language",
+    "code"
+   ],
+   "op": "EXECUTE_CODE",
+   "auth": false,
+   "side_effect": "external_action",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  },
+  {
+   "name": "git.get_diff",
+   "args": [
+    "repository",
+    "ref"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "github.search_issues",
+   "args": [
+    "repository",
+    "query"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "ci.get_status",
+   "args": [
+    "repository",
+    "ref"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "browser.open_page",
+   "args": [
+    "url"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "browser.click",
+   "args": [
+    "target"
+   ],
+   "op": "WRITE_DEVICE",
+   "auth": false,
+   "side_effect": "external_action",
+   "requires_confirmation": false,
+   "risk_level": "high"
+  },
+  {
+   "name": "browser.fill_form",
+   "args": [
+    "fields"
+   ],
+   "op": "WRITE_DEVICE",
+   "auth": false,
+   "side_effect": "external_action",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  },
+  {
+   "name": "computer.screenshot",
+   "args": [],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "computer.upload_file",
+   "args": [
+    "path",
+    "target"
+   ],
+   "op": "WRITE_DEVICE",
+   "auth": true,
+   "side_effect": "external_action",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  },
+  {
+   "name": "weather.get_forecast",
+   "args": [
+    "location",
+    "date"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "maps.search_places",
+   "args": [
+    "query",
+    "location"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "maps.get_directions",
+   "args": [
+    "origin",
+    "destination",
+    "mode"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "travel.search_transport",
+   "args": [
+    "origin",
+    "destination",
+    "date"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "travel.search_hotels",
+   "args": [
+    "location",
+    "dates"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "travel.build_itinerary",
+   "args": [
+    "destination",
+    "dates",
+    "preferences"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "image.analyze",
+   "args": [
+    "image_ref",
+    "question"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "image.generate",
+   "args": [
+    "prompt",
+    "size"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "image.edit",
+   "args": [
+    "image_ref",
+    "instruction"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "ocr.extract_text",
+   "args": [
+    "image_ref"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "design.create_mockup",
+   "args": [
+    "description",
+    "platform"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "audio.transcribe",
+   "args": [
+    "audio_ref",
+    "language"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "audio.translate",
+   "args": [
+    "audio_ref",
+    "target_language"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "speech.generate",
+   "args": [
+    "text",
+    "voice"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "video.summarize",
+   "args": [
+    "video_ref",
+    "focus"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "video.generate",
+   "args": [
+    "prompt",
+    "duration"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "product.search",
+   "args": [
+    "query",
+    "filters"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "product.compare",
+   "args": [
+    "product_ids",
+    "criteria"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "product.get_price",
+   "args": [
+    "product_id"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "cart.add_item",
+   "args": [
+    "product_id",
+    "quantity"
+   ],
+   "op": "WRITE_CART",
+   "auth": true,
+   "side_effect": "write",
+   "requires_confirmation": true,
+   "risk_level": "medium"
+  },
+  {
+   "name": "order.get_status",
+   "args": [
+    "order_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "crm.search_customer",
+   "args": [
+    "query"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "crm.get_account",
+   "args": [
+    "account_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "support.search_tickets",
+   "args": [
+    "query",
+    "status"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "support.create_ticket",
+   "args": [
+    "title",
+    "description",
+    "priority"
+   ],
+   "op": "WRITE_COMMUNICATION",
+   "auth": true,
+   "side_effect": "write",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "contacts.search",
+   "args": [
+    "query"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "notes.search",
+   "args": [
+    "query"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "calculator.evaluate",
+   "args": [
+    "expression"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "translate.text",
+   "args": [
+    "text",
+    "target_language"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "health.search_guidance",
+   "args": [
+    "query"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "health.get_medication_info",
+   "args": [
+    "name"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "fitness.get_activity",
+   "args": [
+    "start",
+    "end"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "appointment.find_clinic",
+   "args": [
+    "location",
+    "specialty"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "learning.search_course",
+   "args": [
+    "topic",
+    "level"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "learning.explain_topic",
+   "args": [
+    "topic",
+    "level"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "quiz.create",
+   "args": [
+    "topic",
+    "difficulty",
+    "count"
+   ],
+   "op": "WRITE_FILE",
+   "auth": false,
+   "side_effect": "write",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "citation.lookup",
+   "args": [
+    "identifier"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "legal.search_policy",
+   "args": [
+    "query",
+    "jurisdiction"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "low"
+  },
+  {
+   "name": "legal.compare_clauses",
+   "args": [
+    "clause_refs"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "contract.extract_terms",
+   "args": [
+    "document_ref"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "compliance.check_text",
+   "args": [
+    "text",
+    "policy_set"
+   ],
+   "op": "READ_PUBLIC_CONTENT",
+   "auth": false,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "device.list",
+   "args": [
+    "location"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "device.get_status",
+   "args": [
+    "device_id"
+   ],
+   "op": "READ_PRIVATE_WORKSPACE",
+   "auth": true,
+   "side_effect": "none",
+   "requires_confirmation": false,
+   "risk_level": "medium"
+  },
+  {
+   "name": "device.set_state",
+   "args": [
+    "device_id",
+    "state"
+   ],
+   "op": "WRITE_DEVICE",
+   "auth": true,
+   "side_effect": "external_action",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  },
+  {
+   "name": "home.create_automation",
+   "args": [
+    "trigger",
+    "actions"
+   ],
+   "op": "WRITE_DEVICE",
+   "auth": true,
+   "side_effect": "external_action",
+   "requires_confirmation": true,
+   "risk_level": "high"
+  }
+ ],
+ "toolsets": [
+  "audio_video",
+  "browser_computer",
+  "calendar_task_project",
+  "cloud_knowledge",
+  "code_git_ci",
+  "commerce",
+  "crm_support",
+  "database_report",
+  "device_home",
+  "education",
+  "file_docs",
+  "geo_travel",
+  "health_fitness",
+  "image_design",
+  "legal_compliance",
+  "mail_messaging",
+  "personal_utils",
+  "spreadsheet_data",
+  "web_read"
+ ],
+ "skills": [
+  "audio-video",
+  "browser-computer",
+  "calendar-tasks",
+  "cloud-knowledge",
+  "code-git-ci",
+  "commerce",
+  "crm-support",
+  "database-report",
+  "device-home",
+  "file-docs",
+  "health-fitness",
+  "image-design",
+  "learning-quiz",
+  "legal-compliance",
+  "mail-messaging",
+  "maps-travel",
+  "personal-utils",
+  "spreadsheet-data",
+  "web-search"
+ ],
+ "operations": [
+  "EXECUTE_CODE",
+  "READ_PRIVATE_WORKSPACE",
+  "READ_PUBLIC_CONTENT",
+  "WRITE_CART",
+  "WRITE_COMMUNICATION",
+  "WRITE_DEVICE",
+  "WRITE_FILE",
+  "WRITE_SCHEDULE"
+ ]
+}

@@ -1,0 +1,160 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "showcase-data run（单次运行公开工件）",
+  "description": "按评测文档 §11.3 九段固定顺序组织；数量字段允许 null（未运行）。禁止字段见 schema/README.md。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["run_id", "batch_id", "case_id", "status", "validity", "experiment", "sections"],
+  "properties": {
+    "run_id": { "type": "string", "minLength": 1 },
+    "batch_id": { "type": "string", "minLength": 1 },
+    "case_id": { "type": "string", "minLength": 1 },
+    "status": { "enum": ["COMPLETE", "FAILED", "INVALID", "CANCELLED", "PENDING_JUDGMENT", "NOT_RUN"] },
+    "validity": { "enum": ["VALID", "INVALID", "UNCLASSIFIED"] },
+    "experiment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["agent_mode", "model", "repeat_index"],
+      "properties": {
+        "agent_mode": { "enum": ["baseline-tool-calling", "langgraph-react", "full-system"] },
+        "context_strategy": { "enum": ["full", "recent-n", "single-summary", "budgeted", null] },
+        "model": { "type": "string", "minLength": 1 },
+        "repeat_index": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "sections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fixed_input", "context", "visible_tools", "model_steps", "code_decisions", "tool_results", "output_checks", "final_result", "cost"],
+      "properties": {
+        "fixed_input": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["message", "scene", "authenticated"],
+          "properties": {
+            "message": { "type": "string" },
+            "scene": { "type": "string" },
+            "authenticated": { "type": "boolean" },
+            "history_count": { "type": "integer", "minimum": 0 },
+            "allowed_tools": { "type": ["array", "null"], "items": { "type": "string" } }
+          }
+        },
+        "context": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["strategy", "raw_tokens", "working_tokens", "required_retained", "item_counts"],
+          "properties": {
+            "strategy": { "type": "string" },
+            "raw_tokens": { "type": ["integer", "null"] },
+            "working_tokens": { "type": ["integer", "null"] },
+            "required_retained": { "type": ["boolean", "null"] },
+            "item_counts": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "required": ["retained", "compressed", "referenced", "isolated", "omitted"],
+              "properties": {
+                "retained": { "type": ["integer", "null"] },
+                "compressed": { "type": ["integer", "null"] },
+                "referenced": { "type": ["integer", "null"] },
+                "isolated": { "type": ["integer", "null"] },
+                "omitted": { "type": ["integer", "null"] }
+              }
+            }
+          }
+        },
+        "visible_tools": { "type": ["array", "null"], "items": { "type": "string" } },
+        "model_steps": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["seq", "decision"],
+            "properties": {
+              "seq": { "type": "integer", "minimum": 1 },
+              "decision": { "type": "string" },
+              "latency_ms": { "type": ["integer", "null"] }
+            }
+          }
+        },
+        "code_decisions": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["seq", "allowed"],
+            "properties": {
+              "seq": { "type": "integer", "minimum": 1 },
+              "allowed": { "type": "boolean" },
+              "audit_code": { "type": "string" }
+            }
+          }
+        },
+        "tool_results": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["seq", "name", "status"],
+            "properties": {
+              "seq": { "type": "integer", "minimum": 1 },
+              "name": { "type": "string" },
+              "status": { "type": "string" },
+              "audit_code": { "type": "string" },
+              "summary": { "type": ["object", "null"] },
+              "source": { "type": ["string", "null"] },
+              "data_time": { "type": ["string", "null"] }
+            }
+          }
+        },
+        "output_checks": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["check", "passed"],
+            "properties": {
+              "check": { "type": "string" },
+              "passed": { "type": ["boolean", "null"] },
+              "detail": { "type": "string" }
+            }
+          }
+        },
+        "final_result": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["answer_excerpt", "audit_codes", "judgment"],
+          "properties": {
+            "answer_excerpt": { "type": "string" },
+            "citations": { "type": ["integer", "null"] },
+            "audit_codes": { "type": "array", "items": { "type": "string" } },
+            "judgment": {
+              "type": ["object", "null"],
+              "additionalProperties": false,
+              "required": ["task_success", "tool_correct", "number_grounded"],
+              "properties": {
+                "task_success": { "type": ["boolean", "null"] },
+                "tool_correct": { "type": ["boolean", "null"] },
+                "number_grounded": { "type": ["boolean", "null"] }
+              }
+            }
+          }
+        },
+        "cost": {
+          "type": ["object", "null"],
+          "additionalProperties": false,
+          "required": ["duration_ms", "prompt_tokens", "completion_tokens"],
+          "properties": {
+            "duration_ms": { "type": ["integer", "null"] },
+            "context_ms": { "type": ["integer", "null"] },
+            "llm_ms": { "type": ["integer", "null"] },
+            "tool_ms": { "type": ["integer", "null"] },
+            "prompt_tokens": { "type": ["integer", "null"] },
+            "completion_tokens": { "type": ["integer", "null"] },
+            "compression_tokens": { "type": ["integer", "null"] },
+            "tokens_estimated": { "type": ["boolean", "null"] }
+          }
+        }
+      }
+    }
+  }
+}

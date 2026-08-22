@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>内部运行台</title>
+<link rel="stylesheet" href="/docs/docs.css">
+<style>
+  .lab-main { max-width: 980px; margin: 0 auto; padding: 30px 22px 80px; }
+  .lab-main h1 { font-size: 22px; }
+  .lab-toolbar { display: flex; gap: 10px; align-items: center; margin: 12px 0 20px; font-size: 14px; }
+  .lab-toolbar button { padding: 6px 14px; border: 1px solid #d8dee9; border-radius: 8px; background: #fff; cursor: pointer; }
+  .lab-form { border: 1px solid #e6eaf1; border-radius: 12px; padding: 18px 20px; background: #fff; }
+  .lab-form fieldset { border: 1px solid #eef1f6; border-radius: 10px; margin: 0 0 14px; padding: 10px 14px; }
+  .lab-form legend { font-size: 13px; color: #5b6575; padding: 0 6px; }
+  .case-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 14px; font-size: 13.5px; }
+  .case-list label { display: block; }
+  .tool-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 14px; font-size: 13.5px; }
+  .tool-group { border: 1px solid #eef1f6; border-radius: 8px; padding: 6px 10px; }
+  .tool-group h4 { margin: 2px 0 6px; font-size: 12.5px; color: #5b6575; }
+  .tool-group label { display: block; }
+  .lab-mini { padding: 3px 12px; border: 1px solid #d8dee9; border-radius: 7px; background: #fff; cursor: pointer; font-size: 12.5px; }
+  fieldset[disabled] .lab-mini { cursor: not-allowed; color: #98a1af; }
+  .lab-row { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; align-items: center; }
+  .lab-row label { display: flex; align-items: center; gap: 6px; }
+  .lab-row input, .lab-row select { padding: 5px 8px; border: 1px solid #d8dee9; border-radius: 7px; font-size: 13.5px; }
+  .lab-submit { padding: 9px 26px; border: 0; border-radius: 9px; background: #1f2d3d; color: #fff; font-size: 14px; cursor: pointer; }
+  .lab-submit:disabled { background: #98a1af; cursor: not-allowed; }
+  .lab-cancel { padding: 6px 16px; border: 1px solid #b23b3b; border-radius: 8px; background: #fff; color: #b23b3b; cursor: pointer; }
+  .lab-cancel:disabled { color: #98a1af; border-color: #d8dee9; cursor: not-allowed; }
+  .job-box { margin-top: 18px; border: 1px dashed #d8dee9; border-radius: 10px; padding: 14px 18px; font-size: 14px; }
+  .job-box .ok { color: #2c7a4b; } .job-box .bad { color: #b23b3b; } .job-box .warn { color: #9a6b0b; }
+  .lab-note { color: #77808f; font-size: 12.5px; margin-top: 8px; }
+  .lab-table { border-collapse: collapse; width: 100%; font-size: 13px; margin-top: 8px; background: #fff; }
+  .lab-table th, .lab-table td { border: 1px solid #e6eaf1; padding: 5px 8px; text-align: left; }
+  .lab-table a { cursor: pointer; color: #1f5fa9; text-decoration: underline; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 9px; font-size: 12px; border: 1px solid #d8dee9; }
+  .badge.COMPLETE { color: #2c7a4b; border-color: #bfe0cc; }
+  .badge.FAILED, .badge.INVALID, .badge.CANCELLED { color: #b23b3b; border-color: #ecc8c8; }
+  .run-detail { margin-top: 10px; border: 1px solid #e6eaf1; border-radius: 10px; padding: 12px 16px; background: #fff; font-size: 13px; }
+  .run-detail h3 { margin: 4px 0 8px; font-size: 15px; }
+  .run-detail h4 { margin: 12px 0 4px; font-size: 13.5px; color: #39424f; }
+  .run-detail dl { display: grid; grid-template-columns: 130px 1fr; gap: 2px 10px; margin: 0; }
+  .run-detail dt { color: #77808f; } .run-detail dd { margin: 0; }
+  .event-list { list-style: none; padding-left: 0; margin: 4px 0 0; font-size: 12.5px; }
+  .event-list li { padding: 2px 0; border-bottom: 1px dashed #eef1f6; }
+  .event-list code { background: #f4f6fa; padding: 0 4px; border-radius: 4px; }
+</style>
+</head>
+<body>
+<main class="lab-main">
+  <h1>内部运行台</h1>
+  <p style="color:#5b6575;font-size:14px">项目所有者按固定题号发起 Agent 对照批次。请求只接受题号与实验配置，不接受问题正文、提示词或自定义工具。</p>
+  <div class="lab-toolbar">
+    <a href="/" style="color:#1f2d3d;text-decoration:none;font-size:13px;font-weight:600;margin-right:10px;padding:6px 12px;border:1px solid #d8dee9;border-radius:8px;background:#fff">← 首页</a>
+    <span id="whoami">…</span>
+    <button type="button" id="logoutBtn">退出登录</button>
+  </div>
+
+  <form class="lab-form" id="batchForm">
+    <fieldset id="llmConfigCard">
+      <legend>模型接入（按当前账号绑定；API Key 选填，留空=沿用已保存或服务端配置）</legend>
+      <div class="lab-row" style="margin-bottom:8px">
+        <label>快速切换 <select id="modelQuick">
+          <option value="">— 选择模型 —</option>
+          <optgroup label="智谱">
+            <option value="glm-4.7-flash">GLM-4.7-Flash</option>
+            <option value="glm-4.7">GLM-4.7</option>
+            <option value="glm-4.6-flash">GLM-4.6-Flash</option>
+          </optgroup>
+          <optgroup label="DeepSeek">
+            <option value="deepseek-chat">DeepSeek-Chat</option>
+            <option value="deepseek-reasoner">DeepSeek-Reasoner</option>
+          </optgroup>
+          <optgroup label="Moonshot">
+            <option value="moonshot-v1-8k">Moonshot-v1-8k</option>
+          </optgroup>
+          <optgroup label="OpenAI">
+            <option value="gpt-4o-mini">GPT-4o-mini</option>
+          </optgroup>
+        </select></label>
+        <span class="lab-note" id="llmConfigStatus">读取当前配置…</span>
+      </div>
+      <div class="lab-row">
+        <label>提供商 <select id="llmProvider">
+          <option value="zhipu">智谱</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="moonshot">Moonshot</option>
+          <option value="openai">OpenAI</option>
+          <option value="custom">自定义</option>
+        </select></label>
+        <label>API 地址 <input id="llmBaseUrl" style="width:250px" placeholder="https://.../v1"></label>
+        <label>模型名 <input id="llmModel" style="width:150px" placeholder="例如 glm-4.7-flash"></label>
+        <label>API Key <input id="llmApiKey" type="password" style="width:190px" placeholder="选填；留空=沿用已保存" autocomplete="off"></label>
+        <button type="button" class="lab-mini" id="llmTestBtn">测试连接</button>
+        <button type="button" class="lab-mini" id="llmSaveBtn">保存配置</button>
+      </div>
+      <p class="lab-note" id="llmTestResult">密钥只保存在数据库（接口永不回显明文，仅显示尾 4 位）；发起批次将使用此配置构建模型客户端。</p>
+    </fieldset>
+    <fieldset>
+      <legend>固定题号（全不选=全部题目）</legend>
+      <div class="case-list" id="caseList"><span style="color:#98a1af">加载题库…</span></div>
+    </fieldset>
+    <fieldset id="toolFieldset" disabled>
+      <legend>工具可见集（GT-4 实验变量；不动=按场景默认装载）</legend>
+      <div class="lab-row" style="margin-bottom:8px">
+        <button type="button" class="lab-mini" id="toolAll">全选</button>
+        <button type="button" class="lab-mini" id="toolNone">全不选</button>
+        <button type="button" class="lab-mini" id="toolDefault">场景默认</button>
+        <span class="lab-note" id="toolCount">已勾 0 / 共 0</span>
+      </div>
+      <div class="tool-groups" id="toolGroups"><span style="color:#98a1af">加载工具目录…</span></div>
+      <p class="lab-note">勾选后本次批次三组同规则收窄可见集（完整模式组 G1 按最终集拦截）；[场景默认]=清空选择并按场景策略装载（现状）。全不选=空集（无任何工具），仅用于「能力缺口」实验，提交时需二次确认。</p>
+    </fieldset>
+    <div class="lab-row">
+      <label>每题次数 <select id="runs"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
+      <label><input type="checkbox" id="includeReact" checked> 含 LangGraph ReAct 组</label>
+      <label>模型 <input id="model" placeholder="缺省取服务端 LLM_MODEL" style="width:200px"></label>
+      <label>批次 token 上限 <input id="maxTotalTokens" type="number" min="1" placeholder="不限" style="width:110px"></label>
+      <label>冻结数据集 <select id="fixtureSetId">
+        <option value="">ab-eval（默认·金融正例）</option>
+        <option value="ab-eval-negative-v1">ab-eval-negative-v1（金融负例）</option>
+        <option value="mock-eval-v1">mock-eval-v1（通用正例）</option>
+      </select></label>
+      <label>检索档 top_k <input id="searchTopK" type="number" min="1" max="8" placeholder="缺省" style="width:70px" title="GT-8 检索装载档:固定 search_tools 返回条数;缺省=模型自报"></label>
+      <button class="lab-submit" type="submit" id="submitBtn">发起批次</button>
+    </div>
+    <p class="lab-note">批次在服务端串行执行（并发上限 1）；执行中可协作取消（已开始的模型调用会等待完成）。完成后经发布脚本投影到公开实证层。</p>
+  </form>
+
+  <div class="job-box" id="jobBox" hidden></div>
+  <div id="batchSection" hidden>
+    <h2 style="font-size:17px;margin-top:26px">批次明细</h2>
+    <p style="color:#77808f;font-size:13px" id="batchMeta"></p>
+    <div id="runsTable"></div>
+    <div id="runDetail" class="run-detail" hidden></div>
+  </div>
+</main>
+<script>
+(function () {
+  "use strict";
+  var RUN_API = window.__RUN_API__ || "http://127.0.0.1:8090";
+  var token = sessionStorage.getItem("lab_token");
+  if (!token) { location.href = "/"; return; }
+  // 顶栏身份展示：登录页写入的用户名（仅展示用，鉴权仍以 Bearer 令牌为准）
+  document.getElementById("whoami").textContent = sessionStorage.getItem("lab_user") || "已登录";
+
+  // ── 模型接入（按账号绑定）：快速切换 + 提供商预设 + 连通性测试 ──
+  var LLM_PROVIDERS = {
+    zhipu: { baseUrl: "https://open.bigmodel.cn/api/paas/v4", model: "glm-4.7-flash" },
+    deepseek: { baseUrl: "https://api.deepseek.com/v1", model: "deepseek-chat" },
+    moonshot: { baseUrl: "https://api.moonshot.cn/v1", model: "moonshot-v1-8k" },
+    openai: { baseUrl: "https://api.openai.com/v1", model: "gpt-4o-mini" },
+    custom: { baseUrl: "", model: "" },
+  };
+  function llmBody(includeKey) {
+    var body = {
+      base_url: document.getElementById("llmBaseUrl").value.trim(),
+      model: document.getElementById("llmModel").value.trim(),
+    };
+    var key = document.getElementById("llmApiKey").value;
+    if (includeKey && key) body.api_key = key;
+    return body;
+  }
+  function llmRenderStatus(cfg) {
+    var el = document.getElementById("llmConfigStatus");
+    if (!cfg.configured) {
+      el.textContent = "未配置（批次用服务端环境配置）";
+      return;
+    }
+    var key = cfg.hasApiKey ? "密钥已存（尾号 " + cfg.keyLast4 + "）" : "未存密钥（回退服务端）";
+    el.textContent = "当前绑定：" + cfg.model + " · " + key;
+    if (cfg.model && !document.getElementById("model").value) document.getElementById("model").value = cfg.model;
+  }
+  api("/api/v1/llm-config").then(function (outcome) {
+    if (outcome.status !== 200) throw new Error("读取失败");
+    var cfg = outcome.body;
+    if (cfg.configured) {
+      document.getElementById("llmBaseUrl").value = cfg.baseUrl || "";
+      document.getElementById("llmModel").value = cfg.model || "";
+    }
+    llmRenderStatus(cfg);
+  }).catch(function (err) {
+    document.getElementById("llmConfigStatus").textContent = "配置读取失败：" + err.message;
+  });
+  document.getElementById("llmProvider").addEventListener("change", function () {
+    var preset = LLM_PROVIDERS[this.value];
+    if (!preset) return;
+    if (preset.baseUrl) document.getElementById("llmBaseUrl").value = preset.baseUrl;
+    if (preset.model) document.getElementById("llmModel").value = preset.model;
+  });
+  document.getElementById("modelQuick").addEventListener("change", function () {
+    var model = this.value;
+    if (!model) return;
+    document.getElementById("llmModel").value = model;
+    document.getElementById("model").value = model;
+    var guess = model.indexOf("deepseek") === 0 ? "deepseek"
+      : model.indexOf("moonshot") === 0 ? "moonshot"
+      : model.indexOf("gpt-") === 0 ? "openai"
+      : model.indexOf("glm-") === 0 ? "zhipu" : "custom";
+    document.getElementById("llmProvider").value = guess;
+    var preset = LLM_PROVIDERS[guess];
+    if (preset && preset.baseUrl && !document.getElementById("llmBaseUrl").value.trim()) {
+      document.getElementById("llmBaseUrl").value = preset.baseUrl;
+    }
+  });
+  document.getElementById("llmTestBtn").addEventListener("click", function () {
+    var out = document.getElementById("llmTestResult");
+    out.textContent = "测试中…";
+    api("/api/v1/llm-config/test", { method: "POST", body: JSON.stringify(llmBody(true)) }).then(function (outcome) {
+      var body = outcome.body || {};
+      out.textContent = (outcome.status === 200 && body.ok ? "✅ " : "❌ ") + (body.detail || body.error || "未知结果");
+    }).catch(function (err) {
+      out.textContent = "❌ " + err.message;
+    });
+  });
+  document.getElementById("llmSaveBtn").addEventListener("click", function () {
+    var out = document.getElementById("llmTestResult");
+    var body = llmBody(true);
+    if (!body.base_url || !body.model) { out.textContent = "请先填写 API 地址与模型名"; return; }
+    api("/api/v1/llm-config", { method: "PUT", body: JSON.stringify(body) }).then(function (outcome) {
+      if (outcome.status !== 200) throw new Error(outcome.body.detail || "保存失败");
+      document.getElementById("llmApiKey").value = "";
+      llmRenderStatus(outcome.body);
+      out.textContent = "✅ 已保存并绑定到当前账号";
+    }).catch(function (err) {
+      out.textContent = "❌ " + err.message;
+    });
+  });
+
+  function api(path, options) {
+    return fetch(RUN_API + path, Object.assign({
+      headers: { "Authorization": "Bearer " + token, "Content-Type": "application/json" },
+    }, options || {})).then(function (res) {
+      if (res.status === 401) { location.href = "/"; throw new Error("会话失效"); }
+      return res.json().then(function (body) { return { status: res.status, body: body }; });
+    });
+  }
+
+  api("/api/v1/cases").then(function (outcome) {
+    if (outcome.status !== 200) throw new Error("题库加载失败");
+    var box = document.getElementById("caseList");
+    box.innerHTML = outcome.body.map(function (c) {
+      return '<label><input type="checkbox" value="' + c.id + '"> ' + c.id + " · " + (c.title || c.message || "") + "</label>";
+    }).join("");
+  }).catch(function (err) {
+    document.getElementById("caseList").innerHTML = '<span class="bad">题库加载失败：' + err.message + "（检查隧道与 data 服务）</span>";
+  });
+
+  // ── 工具可见集勾选区（GT-5）：目录来自 /api/v1/tools，按 domain 分组 ──
+  var toolsTouched = false; // 用户显式操作过勾选/快捷键才随批次提交 visible_tools
+  var toolCatalog = [];
+
+  function renderToolCount() {
+    var checked = document.querySelectorAll("#toolGroups input:checked").length;
+    document.getElementById("toolCount").textContent = "已勾 " + checked + " / 共 " + toolCatalog.length;
+  }
+
+  api("/api/v1/tools").then(function (outcome) {
+    if (outcome.status !== 200) throw new Error("工具目录加载失败（" + outcome.status + "）");
+    toolCatalog = outcome.body || [];
+    var byDomain = {};
+    toolCatalog.forEach(function (tool) {
+      var domain = tool.domain || "other";
+      (byDomain[domain] = byDomain[domain] || []).push(tool);
+    });
+    var html = Object.keys(byDomain).sort().map(function (domain) {
+      var items = byDomain[domain].map(function (tool) {
+        var riskMark = tool.risk_level === "high" ? ' <span title="高风险工具" style="color:#b23b3b">●</span>'
+          : (tool.side_effect && tool.side_effect !== "none" ? ' <span title="写操作类工具" style="color:#9a6b0b">◐</span>' : "");
+        return '<label title="' + esc(tool.description || "") + '"><input type="checkbox" value="' + esc(tool.name) + '"> ' +
+          esc(tool.name) + riskMark + (tool.enabled ? "" : ' <span class="badge INVALID">停用</span>') + "</label>";
+      }).join("");
+      return '<div class="tool-group"><h4>' + esc(domain) + "（" + byDomain[domain].length + "）</h4>" + items + "</div>";
+    }).join("");
+    var box = document.getElementById("toolGroups");
+    box.innerHTML = html || '<span class="lab-note">目录为空。</span>';
+    document.getElementById("toolFieldset").disabled = false;
+    renderToolCount();
+  }).catch(function (err) {
+    document.getElementById("toolGroups").innerHTML =
+      '<span class="bad">工具目录加载失败：' + err.message + '</span> <span class="lab-note">仍可按[场景默认]发起批次。</span>';
+    document.getElementById("toolFieldset").disabled = false;
+  });
+
+  function setAllTools(checked) {
+    Array.prototype.slice.call(document.querySelectorAll("#toolGroups input")).forEach(function (el) { el.checked = checked; });
+    toolsTouched = true;
+    renderToolCount();
+  }
+
+  document.getElementById("toolAll").addEventListener("click", function () { setAllTools(true); });
+  document.getElementById("toolNone").addEventListener("click", function () { setAllTools(false); });
+  document.getElementById("toolDefault").addEventListener("click", function () {
+    setAllTools(false);
+    toolsTouched = false; // 清空选择且回到"未显式选择"：提交不带 visible_tools
+  });
+  document.getElementById("toolGroups").addEventListener("change", function (event) {
+    if (event.target && event.target.type === "checkbox") { toolsTouched = true; renderToolCount(); }
+  });
+
+  document.getElementById("logoutBtn").addEventListener("click", function () {
+    api("/api/v1/logout", { method: "POST" }).catch(function () {});
+    sessionStorage.removeItem("lab_token");
+    sessionStorage.removeItem("lab_user");
+    location.href = "/";
+  });
+
+  document.getElementById("batchForm").addEventListener("submit", function (event) {
+    event.preventDefault();
+    var caseIds = Array.prototype.slice.call(document.querySelectorAll("#caseList input:checked")).map(function (el) { return el.value; });
+    var payload = {
+      case_ids: caseIds.length ? caseIds : null,
+      runs: Number(document.getElementById("runs").value),
+      include_react: document.getElementById("includeReact").checked,
+    };
+    var model = document.getElementById("model").value.trim();
+    if (model) payload.model = model;
+    var tokens = Number(document.getElementById("maxTotalTokens").value);
+    if (tokens >= 1) payload.max_total_tokens = tokens;
+    var fixtureSet = document.getElementById("fixtureSetId").value;
+    if (fixtureSet) payload.fixture_set_id = fixtureSet;
+    var topK = Number(document.getElementById("searchTopK").value);
+    if (topK >= 1 && topK <= 8) payload.search_top_k = Math.round(topK);
+    // 仅当用户显式操作过勾选区才携带 visible_tools（null=场景默认;[] =显式空集）
+    if (toolsTouched) {
+      var visibleTools = Array.prototype.slice.call(document.querySelectorAll("#toolGroups input:checked")).map(function (el) { return el.value; });
+      if (!visibleTools.length && !window.confirm("未勾选任何工具：空集=本次批次无任何工具（能力缺口实验）。确认提交？")) return;
+      payload.visible_tools = visibleTools;
+    }
+
+    var btn = document.getElementById("submitBtn");
+    var box = document.getElementById("jobBox");
+    btn.disabled = true; btn.textContent = "提交中…";
+    box.hidden = false; box.textContent = "提交批次…";
+
+    api("/api/v1/eval-batches", { method: "POST", body: JSON.stringify(payload) }).then(function (outcome) {
+      if (outcome.status === 429) throw new Error("已有批次在运行，请等待完成");
+      if (outcome.status === 400) {
+        var detail = outcome.body && outcome.body.detail;
+        throw new Error(typeof detail === "string" && detail.indexOf("未知工具名") === 0
+          ? "请求被拒绝：" + detail
+          : "请求被拒绝：" + JSON.stringify(outcome.body));
+      }
+      if (outcome.status !== 200) throw new Error("提交失败（" + outcome.status + "）");
+      poll(outcome.body.job_id, outcome.body.batch_id);
+    }).catch(function (err) {
+      box.innerHTML = '<span class="bad">' + err.message + "</span>";
+      btn.disabled = false; btn.textContent = "发起批次";
+    });
+  });
+
+  function requestCancel(jobId) {
+    var button = document.getElementById("cancelBtn");
+    if (button) { button.disabled = true; button.textContent = "已请求取消…"; }
+    api("/api/v1/jobs/" + jobId + "/cancel", { method: "POST" }).then(function (outcome) {
+      if (outcome.status !== 200 && outcome.status !== 404) throw new Error("取消失败（" + outcome.status + "）");
+      if (button && outcome.body && outcome.body.status === "running") button.textContent = "取消中（等待当前运行完成）";
+    }).catch(function (err) {
+      if (button) { button.disabled = false; button.textContent = "取消批次"; }
+      var box = document.getElementById("jobBox");
+      box.insertAdjacentHTML("beforeend", ' <span class="bad">取消请求失败：' + err.message + "</span>");
+    });
+  }
+
+  function poll(jobId, batchId) {
+    var btn = document.getElementById("submitBtn");
+    var box = document.getElementById("jobBox");
+    api("/api/v1/jobs/" + jobId).then(function (outcome) {
+      var job = outcome.body;
+      if (job.status === "running") {
+        box.innerHTML = '批次执行中（batch ' + batchId.slice(0, 8) + "）… 每题每组真实调用模型，18 题 × N 次通常需要数分钟 " +
+          '<button type="button" class="lab-cancel" id="cancelBtn">取消批次</button>';
+        document.getElementById("cancelBtn").addEventListener("click", function () { requestCancel(jobId); });
+        setTimeout(function () { poll(jobId, batchId); }, 5000);
+        return;
+      }
+      btn.disabled = false; btn.textContent = "发起批次";
+      if (job.status === "done" || job.status === "cancelled") {
+        var cases = job.report && job.report.cases ? job.report.cases.length : "?";
+        var stopNote = job.status === "cancelled"
+          ? ' <span class="warn">批次已协作取消：已完成部分照常落库（部分完成）</span>'
+          : (job.report && job.report.stop_reason === "TOKEN_BUDGET_EXCEEDED"
+              ? ' <span class="warn">批次 token 预算耗尽，后续运行未发起（跳过 ' + job.report.skipped_runs + " 次）</span>"
+              : "");
+        var publishNote = job.status === "done"
+          ? "执行 <code>npm run publish:showcase -- --git-commit &lt;sha&gt;</code> 后结果进入公开实证层。"
+          : "取消的批次不发布；查看明细请展开批次运行列表。";
+        box.innerHTML = '<span class="ok">' + (job.status === "cancelled" ? "批次已取消" : "批次完成") + "</span>：batch " +
+          batchId.slice(0, 8) + " · " + cases + " 题。" + stopNote + " " + publishNote;
+        loadBatch(batchId);
+      } else {
+        box.innerHTML = '<span class="bad">批次失败</span>：' + (job.error || "未知错误");
+      }
+    }).catch(function (err) {
+      box.innerHTML = '<span class="bad">状态查询失败：' + err.message + "</span>";
+      btn.disabled = false; btn.textContent = "发起批次";
+    });
+  }
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"]/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[ch];
+    });
+  }
+
+  function loadBatch(batchId) {
+    api("/api/v1/batches/" + batchId).then(function (outcome) {
+      if (outcome.status !== 200) throw new Error("批次读取失败（" + outcome.status + "）");
+      var batch = outcome.body;
+      document.getElementById("batchSection").hidden = false;
+      document.getElementById("batchMeta").textContent =
+        "批次 " + batch.id.slice(0, 8) + " · 状态 " + batch.status + " · 运行 " + (batch.runs || []).length + " 条;点击运行号查看逐步明细。";
+      var rows = (batch.runs || []).map(function (run) {
+        return "<tr><td><a data-run=\"" + esc(run.id) + "\">" + esc(String(run.id).slice(-8)) + "</a></td>" +
+          "<td><span class=\"badge " + esc(run.status) + "\">" + esc(run.status) + "</span></td>" +
+          "<td>" + esc(run.agent_mode) + "</td><td>" + esc(run.case_id) + "</td>" +
+          "<td>" + esc(run.variant_id) + "</td><td>" + esc(run.model) + "</td></tr>";
+      }).join("");
+      document.getElementById("runsTable").innerHTML = rows
+        ? '<table class="lab-table"><thead><tr><th>运行</th><th>状态</th><th>组</th><th>题号</th><th>变体</th><th>模型</th></tr></thead><tbody>' + rows + "</tbody></table>"
+        : '<p class="lab-note">该批次没有落库运行。</p>';
+      Array.prototype.slice.call(document.querySelectorAll("#runsTable a")).forEach(function (link) {
+        link.addEventListener("click", function () { loadRunDetail(link.getAttribute("data-run")); });
+      });
+    }).catch(function (err) {
+      document.getElementById("runsTable").innerHTML = '<span class="bad">' + err.message + "</span>";
+    });
+  }
+
+  function loadRunDetail(runId) {
+    api("/api/v1/runs/" + runId + "/detail").then(function (outcome) {
+      if (outcome.status !== 200) throw new Error("运行明细读取失败（" + outcome.status + "）");
+      renderRunDetail(outcome.body);
+    }).catch(function (err) {
+      var box = document.getElementById("runDetail");
+      box.hidden = false;
+      box.innerHTML = '<span class="bad">' + err.message + "</span>";
+    });
+  }
+
+  function renderRunDetail(run) {
+    var box = document.getElementById("runDetail");
+    var events = (run.events || []).map(function (event) {
+      return "<li><code>" + esc(event.event_type) + "</code> <span class=\"lab-note\">#" + esc(event.sequence) + "</span></li>";
+    }).join("");
+    var models = (run.modelCalls || []).map(function (call) {
+      return "<li>#" + esc(call.sequence) + " " + esc(call.status) + " · in " + esc(call.input_tokens) +
+        " / out " + esc(call.output_tokens) + " tok · " + esc(call.duration_ms) + "ms" +
+        (call.error_category ? ' <span class="badge INVALID">' + esc(call.error_category) + "</span>" : "") + "</li>";
+    }).join("");
+    var tools = (run.toolCalls || []).map(function (call) {
+      return "<li><code>" + esc(call.tool_name) + "</code> " + esc(call.status) +
+        (call.audit_code ? " · " + esc(call.audit_code) : "") + " · " + esc(call.duration_ms) + "ms</li>";
+    }).join("");
+    var guards = (run.guardrailChecks || []).map(function (check) {
+      return "<li>" + esc(check.stage) + " → " + esc(check.decision) +
+        (check.audit_code ? " · <code>" + esc(check.audit_code) + "</code>" : "") + "</li>";
+    }).join("");
+    var m = (run.measurements && run.measurements[0]) || {};
+    box.hidden = false;
+    box.innerHTML = "<h3>运行 " + esc(String(run.id).slice(-8)) + "</h3>" +
+      "<dl>" +
+      "<dt>题号 / 变体</dt><dd>" + esc(run.case_id) + " / " + esc(run.variant_id) + "</dd>" +
+      "<dt>组 / 模型</dt><dd>" + esc(run.agent_mode) + " / " + esc(run.model) + "</dd>" +
+      "<dt>状态</dt><dd>" + esc(run.status) + (run.error_category ? " · " + esc(run.error_category) : "") + "</dd>" +
+      "<dt>快照</dt><dd>" + esc(run.snapshot_id) + "</dd>" +
+      "<dt>token / 耗时</dt><dd>prompt " + esc(m.prompt_tokens) + " · completion " + esc(m.completion_tokens) +
+        " · llm " + esc(m.llm_ms) + "ms · tool " + esc(m.tool_ms) + "ms · guardrail " + esc(m.guardrail_ms) +
+        "ms · 总 " + esc(m.total_duration_ms) + "ms</dd>" +
+      "</dl>" +
+      "<h4>事件流（run_events）</h4><ul class=\"event-list\">" + (events || "<li class=\"lab-note\">无</li>") + "</ul>" +
+      "<h4>模型调用（model_calls）</h4><ul class=\"event-list\">" + (models || "<li class=\"lab-note\">无</li>") + "</ul>" +
+      "<h4>工具调用（tool_calls）</h4><ul class=\"event-list\">" + (tools || "<li class=\"lab-note\">无</li>") + "</ul>" +
+      "<h4>治理检查（guardrail_checks）</h4><ul class=\"event-list\">" + (guards || "<li class=\"lab-note\">无</li>") + "</ul>";
+  }
+})();
+</script>
+</body>
+</html>

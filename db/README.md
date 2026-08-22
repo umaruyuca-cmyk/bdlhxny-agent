@@ -1,29 +1,49 @@
-# 数据库脚本目录
+# db
 
-本目录是仓库唯一的数据库脚本位置。按「空库全量」维护；应用启动不执行 DDL/seed/迁移。
+本目录是 Touchstone 数据库的唯一来源，保存数据库总体设计、需要人工执行的
+PostgreSQL 脚本、只读查询示例和维护规则。
 
-## 怎么执行
-
-1. 打开 [execution/](./execution/) —— **按日期追加的执行说明**
-2. 以其中**最新一份**为当前基线（见 [execution/README.md](./execution/README.md)）
-3. 用**一个超级管理员**按该文件顺序跑 SQL
-
-**当前基线：** [execution/20260819_watch表.md](./execution/20260819_watch表.md)
+Data 服务不会自动建表或升级数据库。数据库初始化和后续变更必须由维护者明确选择
+脚本并手动执行。
 
 ## 目录结构
 
-| 路径 | 用途 |
+```text
+db/
+├─ README.md
+├─ docs/
+│  └─ 01-数据库总体设计.md
+└─ postgresql/
+   ├─ README.md
+   ├─ setup/
+   │  ├─ README.md
+   │  └─ init.sql
+   ├─ changes/
+   │  └─ README.md
+   ├─ queries/
+   │  ├─ README.md
+   │  └─ reporting-examples.sql
+   └─ maintenance/
+      └─ README.md
+```
+
+## 目录职责
+
+| 目录 | 用途 |
 |---|---|
-| `execution/` | 每次 DB 更新追加一份执行说明（管理入口） |
-| `postgresql/bootstrap.sql` | 角色与 Schema 初始化 |
-| `postgresql/schema/` | 全量表结构 |
-| `postgresql/seed/` | 全量种子（能力目录 + `demo_` 前缀演示数据，二者分文件） |
-| `mysql/user_schema.sql` | 认证/用户模块（独立 MySQL，可选） |
+| `docs/` | 数据边界、表关系、字段规则和数据保留设计 |
+| `postgresql/setup/` | 新数据库第一次初始化时手动执行的单一脚本 `init.sql`（按原 01–08 顺序合并，分段事务与登记） |
+| `postgresql/changes/` | 数据库投入使用后的增量修改脚本 |
+| `postgresql/queries/` | 报表和排障使用的只读查询 |
+| `postgresql/maintenance/` | 备份、恢复、归档和清理规则 |
 
-已删除：`postgresql/upgrades/`（全量约定下不再使用增量脚本）。
+## 执行边界
 
-## 以后每次改库
+- 应用启动不会执行 `db/` 中的任何文件；
+- Docker 镜像不包含自动迁移逻辑；
+- SQL 不打包到 Data 服务 JAR；
+- 只有数据库维护者可以手动执行结构和初始化脚本；
+- 公开 Web 服务不连接 PostgreSQL；
+- 仓库不保存数据库密码、备份文件或真实用户数据。
 
-1. 改 `schema/` / `seed/`（必要时 `bootstrap.sql`）
-2. 在 `execution/` **新增** `YYYYMMDD_说明.md`（不要改旧文件）
-3. 把本 README「当前基线」链接改到最新文件
+具体执行命令见 [`postgresql/setup/README.md`](./postgresql/setup/README.md)。
