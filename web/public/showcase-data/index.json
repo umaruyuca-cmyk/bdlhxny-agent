@@ -1,17 +1,27 @@
 {
-  "generated_at": "2026-08-21T15:46:01+08:00",
-  "formal_batches": [],
+  "generated_at": "2026-08-22T23:38:49+08:00",
+  "formal_batches": [
+    {
+      "batch_id": "1aeee72b-7b41-4064-b890-b72c3f42333d",
+      "published_at": "2026-08-22T15:41:31.660Z",
+      "is_formal": true,
+      "case_count": 3,
+      "runs_per_case": 5,
+      "model": "Qwen/Qwen3.6-35B-A3B",
+      "git_commit": "9ab0e25"
+    }
+  ],
   "latest_batch": {
-    "batch_id": "fa37d76f-f75c-4ec4-8272-8ae425f45deb",
-    "published_at": "2026-08-21T08:13:37.258Z",
-    "is_formal": false,
-    "case_count": 18,
-    "runs_per_case": 1,
-    "model": "glm-4.7-flash",
-    "git_commit": "32ea58d",
+    "batch_id": "1aeee72b-7b41-4064-b890-b72c3f42333d",
+    "published_at": "2026-08-22T15:41:31.660Z",
+    "is_formal": true,
+    "case_count": 3,
+    "runs_per_case": 5,
+    "model": "Qwen/Qwen3.6-35B-A3B",
+    "git_commit": "9ab0e25",
     "validity_gate": {
-      "met": false,
-      "reason": "运行有效性分类未实现（P3-1）：本批次仅作过程参考，不构成正式基准"
+      "met": true,
+      "reason": "每组有效样本 ≥ 5(任务三门槛),发布校验(敏感扫描/hash 复算/引用解析)全部通过;本批次无效运行 0 次已单列"
     }
   }
 }
