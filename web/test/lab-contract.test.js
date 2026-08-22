@@ -31,14 +31,14 @@ test("/lab 登录页与批次页存在，只在此处允许表单与运行 API �
   }
   assert.match(login, /sessionStorage/, "登录令牌只进 sessionStorage");
   assert.match(index, /case_ids/, "批次页只提交题号与实验配置");
-  // 提交体只允许七个键（与 EvalBatchRequest 对齐，GT-2/GT-4 增 fixture_set_id/visible_tools），
-  // 不得夹带问题正文
+  // 提交体只允许八个键（与 EvalBatchRequest 对齐，GT-2/GT-4/GT-8 增
+  // fixture_set_id/visible_tools/search_top_k），不得夹带问题正文
   const literal = index.match(/payload = \{([^}]*)\}/);
   const literalKeys = literal ? [...literal[1].matchAll(/\b([a-z_]+)\s*:/g)].map((m) => m[1]) : [];
   const assignKeys = [...index.matchAll(/payload\.([a-z_]+)\s*=/g)].map((m) => m[1]);
   assert.deepEqual(
     [...new Set([...literalKeys, ...assignKeys])].sort(),
-    ["case_ids", "fixture_set_id", "include_react", "max_total_tokens", "model", "runs", "visible_tools"],
+    ["case_ids", "fixture_set_id", "include_react", "max_total_tokens", "model", "runs", "search_top_k", "visible_tools"],
   );
   assert.doesNotMatch(index, /payload\.?(message|prompt|system_prompt|tools)/, "不得提交问题正文、提示词或自定义工具");
 });

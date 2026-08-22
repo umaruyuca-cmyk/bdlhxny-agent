@@ -120,7 +120,7 @@ _KNOWN_CHECK_KEYS = frozenset(
     {
         "category", "expected_tools", "absent_tools", "fastpath",
         "forbidden_actions", "forbidden_facts", "required_context",
-        "context_expectations", "fixture_only", "expected_behavior",
+        "context_expectations", "fixture_only", "expected_behavior", "note",
         "expected_params", "expected_order", "expected_search", "confirmation_present",
     }
 )
@@ -423,6 +423,7 @@ async def run_treatment(
     executor: Any,
     *,
     visible_override: frozenset[str] | None = None,
+    search_top_k: int | None = None,
 ) -> tuple[AgentResult, Any, Any]:
     loop = AgentLoop(
         llm=llm,
@@ -432,6 +433,7 @@ async def run_treatment(
         tool_loading="scoped",
         max_tool_calls=20,
         visible_override=visible_override,
+        search_top_k=search_top_k,
     )
     turn = AgentTurn(
         user_id="eval-user" if case.authenticated else "guest",
@@ -886,6 +888,7 @@ async def run_ab_eval(
     max_total_tokens: int | None = None,
     fixture_set_id: str = FIXTURE_SET_ID,
     visible_tools: list[str] | None = None,
+    search_top_k: int | None = None,
 ) -> ABReport:
     """跑一轮对照批次;每次执行(case × mode × repeat)产出完整 RunRecord。
 
@@ -1046,7 +1049,12 @@ async def run_ab_eval(
             t_exec = RecordingExecutor(build_executor(), t_recorder)
             try:
                 t_result, _inner_exec, _loop = await run_treatment(
-                    case, RecordingLLM(llm, t_recorder, model), catalog, t_exec, visible_override=override
+                    case,
+                    RecordingLLM(llm, t_recorder, model),
+                    catalog,
+                    t_exec,
+                    visible_override=override,
+                    search_top_k=search_top_k,
                 )
                 break
             except Exception as exc:  # noqa: BLE001 —— 异常降级为一次运行,不中断批次

@@ -106,7 +106,13 @@ class EvalBatchRequest(BaseModel):
     )
     visible_tools: list[str] | None = Field(
         default=None,
-        description="工具可见集(GT-4):null=按场景默认;空列表视为 null;元素必须属于工具目录",
+        description="工具可见集(GT-4):null=按场景默认;[] 为显式空集(能力缺口实验);元素必须属于工具目录",
+    )
+    search_top_k: int | None = Field(
+        default=None,
+        ge=1,
+        le=8,
+        description="检索装载档 top_k 批次变量(GT-8):设置后固定 search_tools 返回条数;缺省=模型自报(1..8,默认3)",
     )
 
 
@@ -233,6 +239,7 @@ def start_eval_batch(
                 "maxTotalTokens": _max_total_tokens(request),
                 "fixtureSetId": request.fixture_set_id or "ab-eval",
                 "visibleTools": request.visible_tools,
+                "searchTopK": request.search_top_k,
             },
         )
     except DataServiceError as exc:
@@ -404,6 +411,7 @@ def _execute_eval(
             max_total_tokens=_max_total_tokens(request),
             fixture_set_id=request.fixture_set_id or "ab-eval",
             visible_tools=request.visible_tools,
+            search_top_k=request.search_top_k,
         )
 
     report = asyncio.run(run())

@@ -475,6 +475,24 @@ Mock 返回不包含真实业务事实。多工具用例如果依赖下一步参
 
 同一个用例在不同目录规模下运行时，必须保持模型、Prompt、问题、上下文、参数 schema 和 Mock 执行器一致。
 
+### 9.1 档位建议勾选清单（GT-8 交付；/lab 勾选即得档位）
+
+档位构成原则：同族优先、金标工具分布一致、四档共享同一金标题集（第一阶段
+gt8-\* 用例集）。四档的前 8 个工具完全一致（小目录金标），逐档只做同族扩充，
+保证跨档可比。
+
+| 档位 | 数量 | 建议勾选清单 |
+|---|---:|---|
+| 小目录 | 8 | `market.resolve_instrument` `market.get_realtime_quote` `market.get_historical_prices` `market.get_financial_statements` `market.get_valuation` `market.get_news` `research.web_search` `analysis.run_analysis` |
+| 中目录 | 24 | 小目录 8 + `market.get_industry_context` `market.get_money_flow` `research.deep_search` `portfolio.get_current_positions` `portfolio.get_account_snapshot` `portfolio.get_transaction_history` `portfolio.build_current_valuation` `user.get_risk_profile` `web.search` `file.search` `mail.search` `calendar.list_events` `weather.get_forecast` `maps.search_places` `product.search` `translate.text` `device.list` `order.get_status` `calculator.evaluate` `audio.transcribe` `image.generate` `ocr.extract_text` `citation.lookup` |
+| 大目录 | 48 | 中目录 24 + 每方向相邻工具（干扰）24： `web.open` `file.read` `document.summarize` `mail.read` `message.search` `calendar.find_availability` `task.list` `spreadsheet.read_range` `database.list_tables` `code.search` `browser.open_page` `maps.get_directions` `image.analyze` `speech.generate` `video.summarize` `product.compare` `crm.search_customer` `contacts.search` `notes.search` `health.search_guidance` `learning.search_course` `legal.search_policy` `device.get_status` `home.create_automation` |
+| 超大目录 | 112 | 全目录（金融 16 + 通用 96），`/lab` 全选即得 |
+| 搜索装载 | 初始 1 | 只勾 `search_tools`（引擎侧元工具）+ 按需设「检索档 top_k」批次参数 |
+
+注意：四档对照时完整模式组按 `scoped(scene) ∩ 勾选集` 装载——包含通用工具的
+档位下完整模式组可见集会小于裸调用/ReAct 组（SCENE_TOOLSETS 未含通用工具集，
+属已记档的引擎现状）；跨组同集对照的结论以裸调用 vs ReAct 两组为主。
+
 ## 10. 固定用例设计
 
 每个工具至少准备三种表达：

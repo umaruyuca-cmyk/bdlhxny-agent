@@ -133,6 +133,7 @@ class AgentLoop:
         encoder: Encoder | None = None,
         context_builder: ContextBuilder | None = None,
         visible_override: frozenset[str] | None = None,
+        search_top_k: int | None = None,
     ) -> None:
         self._llm = llm
         self._catalog = catalog
@@ -145,6 +146,9 @@ class AgentLoop:
         # GT-4 可见集覆盖:最终可见集 = 装载策略结果 ∩ override(None=不覆盖)。
         # loaded_names 按交集生成,G1 据此拦截被勾掉的工具(拒绝+审计码)。
         self._visible_override = visible_override
+        # GT-8 检索档 top_k 批次变量:设置后固定检索条数(覆盖模型自报值,
+        # 单一变量纪律);None=现状(模型自报 1..8,默认 3)。
+        self._search_top_k = search_top_k
 
     async def run(self, turn: AgentTurn, *, stream: StreamSink | None = None) -> AgentResult:
         if self._router is not None:
@@ -204,7 +208,7 @@ class AgentLoop:
             if name == SEARCH_TOOLS_NAME:
                 return self._loader.run_search(
                     str(arguments.get("query") or ""),
-                    top_k=_top_k(arguments),
+                    top_k=self._search_top_k if self._search_top_k is not None else _top_k(arguments),
                     scene_tag=turn.scene_tag,
                     authenticated=turn.authenticated,
                 )

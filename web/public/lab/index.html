@@ -83,6 +83,7 @@
         <option value="ab-eval-negative-v1">ab-eval-negative-v1（金融负例）</option>
         <option value="mock-eval-v1">mock-eval-v1（通用正例）</option>
       </select></label>
+      <label>检索档 top_k <input id="searchTopK" type="number" min="1" max="8" placeholder="缺省" style="width:70px" title="GT-8 检索装载档:固定 search_tools 返回条数;缺省=模型自报"></label>
       <button class="lab-submit" type="submit" id="submitBtn">发起批次</button>
     </div>
     <p class="lab-note">批次在服务端串行执行（并发上限 1）；执行中可协作取消（已开始的模型调用会等待完成）。完成后经发布脚本投影到公开实证层。</p>
@@ -194,6 +195,8 @@
     if (tokens >= 1) payload.max_total_tokens = tokens;
     var fixtureSet = document.getElementById("fixtureSetId").value;
     if (fixtureSet) payload.fixture_set_id = fixtureSet;
+    var topK = Number(document.getElementById("searchTopK").value);
+    if (topK >= 1 && topK <= 8) payload.search_top_k = Math.round(topK);
     // 仅当用户显式操作过勾选区才携带 visible_tools（null=场景默认;[] =显式空集）
     if (toolsTouched) {
       var visibleTools = Array.prototype.slice.call(document.querySelectorAll("#toolGroups input:checked")).map(function (el) { return el.value; });
