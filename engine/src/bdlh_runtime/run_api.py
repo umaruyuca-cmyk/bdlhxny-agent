@@ -99,6 +99,11 @@ class EvalBatchRequest(BaseModel):
         ge=1,
         description="批次 token 上限(任务四):累计消耗达到后停止发起新运行;缺省取 EVAL_MAX_TOTAL_TOKENS(未设=不限)",
     )
+    fixture_set_id: str | None = Field(
+        default=None,
+        max_length=100,
+        description="冻结数据集(GT-2);缺省 ab-eval;负例集 ab-eval-negative-v1,通用集 mock-eval-v1",
+    )
 
 
 class LoginRequest(BaseModel):
@@ -198,6 +203,7 @@ def start_eval_batch(
                 "minValidSamples": int(os.getenv("EVAL_MIN_VALID_SAMPLES", "5")),
                 "interleaveSeed": DEFAULT_INTERLEAVE_SEED,
                 "maxTotalTokens": _max_total_tokens(request),
+                "fixtureSetId": request.fixture_set_id or "ab-eval",
             },
         )
     except DataServiceError as exc:
@@ -367,6 +373,7 @@ def _execute_eval(
             cases=load_cases(catalog),
             should_stop=(lambda: bool(job.get("cancel_requested"))) if job is not None else None,
             max_total_tokens=_max_total_tokens(request),
+            fixture_set_id=request.fixture_set_id or "ab-eval",
         )
 
     report = asyncio.run(run())
@@ -438,6 +445,7 @@ def _persist_one_run(
                 "runs": request.runs,
                 "toolData": "frozen",
                 "repeatIndex": record.repeat_index,
+                "fixtureSetId": getattr(request, "fixture_set_id", None) or "ab-eval",
             },
         }
     )

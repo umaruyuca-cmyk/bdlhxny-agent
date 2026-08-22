@@ -265,6 +265,7 @@ class ABReport:
     cases: list[CaseReport] = field(default_factory=list)
     model: str = "glm-4.7"
     executor: str = "frozen"
+    fixture_set_id: str = FIXTURE_SET_ID
     run_records: list[RunRecord] = field(default_factory=list)
     # 过程控制(任务四):CANCELLED / TOKEN_BUDGET_EXCEEDED;未发起的运行数
     stop_reason: str | None = None
@@ -606,6 +607,7 @@ async def run_ab_eval(
     min_valid_samples: int | None = None,
     should_stop: Callable[[], bool] | None = None,
     max_total_tokens: int | None = None,
+    fixture_set_id: str = FIXTURE_SET_ID,
 ) -> ABReport:
     """跑一轮对照批次;每次执行(case × mode × repeat)产出完整 RunRecord。
 
@@ -613,6 +615,9 @@ async def run_ab_eval(
     过程可控(任务四):``should_stop`` 协作取消(轮次间隙检查,已开始的运行
     等待完成);``max_total_tokens`` 批次预算耗尽后停止发起新运行(区别于 INVALID,
     未发起的运行不产生记录,计入 skipped)。
+
+    冻结集(GT-2):``fixture_set_id`` 是批次级实验变量——ab-eval(金融正例)/
+    ab-eval-negative-v1(负例)/ mock-eval-v1(通用),随报告与 fixed_conditions 记录。
     """
 
     if not cases:
@@ -624,7 +629,7 @@ async def run_ab_eval(
     if catalog is None or frozen is None:
         data = DataClient()
         catalog = catalog_from_snapshot(load_and_validate_payload(data.get_tool_catalog()))
-        frozen = FrozenObservations(data.get_tool_fixtures(FIXTURE_SET_ID))
+        frozen = FrozenObservations(data.get_tool_fixtures(fixture_set_id))
     catalog_names = {c.name for c in catalog.list()}
     all_cards = [c for c in catalog.list() if c.name != "search_tools"]
     guardrail = OutputGuardrail()
@@ -872,6 +877,7 @@ async def run_ab_eval(
         cases=case_reports_ordered,
         model=model,
         executor="frozen",
+        fixture_set_id=fixture_set_id,
         run_records=run_records,
         stop_reason=stop_reason,
         skipped_runs=max(0, expected_runs - len(run_records)),
@@ -1182,6 +1188,7 @@ def _report_payload(report: ABReport) -> dict[str, Any]:
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
         "model": report.model,
         "executor": report.executor,
+        "fixture_set_id": report.fixture_set_id,
         "runs_per_case": report.runs_per_case,
         "case_count": report.case_count,
         "groups": groups,

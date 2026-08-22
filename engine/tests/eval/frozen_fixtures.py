@@ -119,6 +119,22 @@ FROZEN_RESPONSES: list[tuple[str, str, dict[str, Any]]] = [
         "market.resolve_instrument",
         {"symbol": "600519", "name": "贵州茅台", "exchange": "SHSE", "industry": "白酒"},
     ),
+    # GT-2 补录(changes/20260822-fixture-deep-search.sql,sequence 18):
+    # deep_search 最小深度研究返回——结论摘要 + 来源列表。
+    (
+        "research.deep_search",
+        "research.deep_search",
+        {"question": "宁德时代投资价值综合评估", "objective": "多源交叉验证基本面与估值",
+         "conclusion": "宁德时代为全球动力电池龙头，半年报营收同比增长稳健、roe 高于行业均值；"
+                       "固态电池技术取得突破但量产节奏存在不确定性；估值 pe_ttm 高于行业中位数，"
+                       "短期资金呈净流出。综合判断：基本面中性偏强，估值偏高，"
+                       "适合已持仓者继续持有、未持仓者等待估值回归。",
+         "sources": [
+             {"title": "固态电池最新进展", "url": "https://example.com/1"},
+             {"title": "新能源行业分析", "url": "https://example.com/2"},
+             {"title": "宁德时代发布半年报", "url": "https://example.com/3"},
+         ]},
+    ),
 ]
 
 
