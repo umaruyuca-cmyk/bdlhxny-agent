@@ -365,9 +365,9 @@ class RunRecorder:
         self.record.events.append(
             {
                 "sequence": self._event_seq,
-                "event_type": event_type,
+                "eventType": event_type,
                 "payload": payload,
-                "occurred_at": _now_iso(),
+                "occurredAt": _now_iso(),
             }
         )
         return self._event_seq
@@ -522,8 +522,10 @@ def message_content(message: Any) -> str:
     calls = getattr(message, "tool_calls", None) or []
     if calls:
         rendered = [
-            {"name": str(call.get("name") if isinstance(call, dict) else getattr(call, "name", "")),
-             "args": call.get("args") if isinstance(call, dict) else getattr(call, "args", {})}
+            {
+                "name": str(call.get("name") if isinstance(call, dict) else getattr(call, "name", "")),
+                "args": call.get("args") if isinstance(call, dict) else getattr(call, "args", {}),
+            }
             for call in calls
         ]
         content = (content + "\n" if content else "") + json.dumps(rendered, ensure_ascii=False, default=str)
@@ -990,15 +992,9 @@ def _artifact_context_section(record: RunRecord) -> dict[str, Any]:
         }
     decisions = build.get("decisions") or []
     selected = [
-        str(row.get("itemKey"))
-        for row in decisions
-        if row.get("action") in {"kept", "compressed", "referenced"}
+        str(row.get("itemKey")) for row in decisions if row.get("action") in {"kept", "compressed", "referenced"}
     ]
-    omitted = [
-        str(row.get("itemKey"))
-        for row in decisions
-        if row.get("action") in {"omitted", "isolated"}
-    ]
+    omitted = [str(row.get("itemKey")) for row in decisions if row.get("action") in {"omitted", "isolated"}]
     section: dict[str, Any] = {
         "strategy": build.get("strategy") or record.context_strategy,
         "raw_tokens": int(build.get("originalTokens") or 0),

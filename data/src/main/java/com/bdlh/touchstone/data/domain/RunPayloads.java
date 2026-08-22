@@ -107,6 +107,11 @@ public final class RunPayloads {
             String errorCategory,
             String errorMessage) {}
 
+    public record LlmConfigRequest(
+            @NotBlank String baseUrl,
+            @NotBlank String model,
+            String apiKey) {}
+
     public record ModelCallMessageInput(
             @Min(0) int messageOrder,
             @NotBlank String role,

@@ -95,10 +95,7 @@ async def test_interleave_shuffles_groups_and_rotates_cases() -> None:
 
 def test_threshold_three_valid_two_invalid_not_met() -> None:
     """验收:3 有效 + 2 无效(429 注入)的批次被判未达门槛。"""
-    runs = [
-        RunJudgment(tool_correct=True, validity="VALID", run_key=f"baseline-ok-{index}")
-        for index in range(3)
-    ] + [
+    runs = [RunJudgment(tool_correct=True, validity="VALID", run_key=f"baseline-ok-{index}") for index in range(3)] + [
         RunJudgment(
             error="Error code: 429 - rate limit exceeded",
             validity="INVALID",

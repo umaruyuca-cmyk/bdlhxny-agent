@@ -221,3 +221,9 @@ def test_mcp_tool_same_governance_as_local(registry_snapshot):
     catalog = catalog_from_snapshot(registry_snapshot)
     with pytest.raises(ValueError, match="C-1"):
         register_mcp_tool(catalog, name="broker.mcp_buy", description="经 MCP 买入")
+
+
+def test_generic_order_status_readonly_exempt():
+    """GT-6 通用目录的 order.get_status(只读订单查询)不被 C-1 名字守卫误拦。"""
+    assert not is_trading_semantic("order.get_status", "查询订单状态")
+    assert is_trading_semantic("order.place_order", "下单")  # 真执行语义仍拦截

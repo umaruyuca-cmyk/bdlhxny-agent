@@ -60,10 +60,7 @@ def _capability_section() -> str:
 
 def _sql_rows() -> list[tuple[str, str, str, str]]:
     """(name, side_effect, requires_confirmation, risk_level),按 SQL 顺序。"""
-    return [
-        (m.group(1), m.group(3), m.group(4), m.group(5))
-        for m in _ROW.finditer(_capability_section())
-    ]
+    return [(m.group(1), m.group(3), m.group(4), m.group(5)) for m in _ROW.finditer(_capability_section())]
 
 
 def test_generic_tool_names_match_manifest():
@@ -127,6 +124,11 @@ def test_operations_registered_but_not_runtime_allowed():
     new_ops = re.findall(r"^\('([A-Z_]+)',", section, re.MULTILINE)
     assert len(new_ops) == 8
     assert set(new_ops) >= {
-        "WRITE_COMMUNICATION", "WRITE_SCHEDULE", "WRITE_FILE", "WRITE_DEVICE", "EXECUTE_CODE", "WRITE_CART",
+        "WRITE_COMMUNICATION",
+        "WRITE_SCHEDULE",
+        "WRITE_FILE",
+        "WRITE_DEVICE",
+        "EXECUTE_CODE",
+        "WRITE_CART",
     }
     assert not set(new_ops) & set(DEFAULT_RUNTIME_ALLOWED_OPERATIONS), "新操作证不得进入运行允许集"

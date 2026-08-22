@@ -57,11 +57,13 @@ _TRADING_EN_PATTERN = re.compile(
 #: 中文交易执行语义：不用 ``\b``（CJK 与 ``\w`` 同属单词字符，边界匹配会漏判）。
 _TRADING_ZH_TERMS = ("买入", "卖出", "下单", "挂单", "撤单", "交易执行", "调仓执行")
 
-#: 显式豁免：名称/描述含"交易"字样但语义为只读查询的工具（白名单优先于模式）。
+#: 显式豁免：名称/描述含"交易/下单"字样但语义为只读查询的工具（白名单优先于模式）。
 _TRADING_EXEMPT_NAMES = frozenset(
     {
         # 只读交易历史查询：查询已发生交易，不承载交易执行
         "portfolio.get_transaction_history",
+        # GT-6 通用目录的只读订单状态查询：名字含 order 但只查询,不下单
+        "order.get_status",
     }
 )
 

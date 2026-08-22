@@ -26,3 +26,17 @@ VALUES ('20260821-add-run-cancel-reason.sql', '为运行记录增加取消原因
 ```
 
 本目录不使用 Flyway 版本号，也不会被应用自动扫描。
+
+## 脚本依赖顺序（2026-08-22 更新）
+
+- `20260822-tool-catalog-extended-fields.sql`：**仅用于 2026-08-22 之前初始化的
+  历史库**。此日期起 `setup/init.sql` 建表已直接包含评测轴三列，新库不再执行。
+- `20260822-generic-mock-tools.sql`：依赖上述三列存在（历史库须先执行
+  extended-fields；新库由 init.sql 提供）。内部两段冻结集大 INSERT 已带
+  `ON CONFLICT DO NOTHING`，可安全重跑。
+- `20260822-generic-phase1-cases.sql`：依赖 generic-mock-tools 的 96 个通用工具
+  行存在（用例金标引用工具名）。
+- `20260821-long-context-cases.sql`、`20260822-fixture-negative.sql`、
+  `20260822-fixture-deep-search.sql`：相互独立，任意时间执行；均已幂等可重跑。
+
+新库完整初始化顺序见 `../setup/README.md` 的《新库需要的后续变更脚本》。

@@ -10,8 +10,8 @@
 
 BEGIN;
 
-SET lock_timeout = '5s';
-SET statement_timeout = '15s';
+SET LOCAL lock_timeout = '5s';
+SET LOCAL statement_timeout = '15s';
 
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
@@ -21,6 +21,7 @@ ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN arguments_hash DROP N
 ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN response_hash DROP NOT NULL;
 
 -- 基准键行（arguments '{}' 与既有基准键行一致；sequence 续 18）。
+-- 幂等：数据行与登记行均 ON CONFLICT DO NOTHING，可安全重跑。
 INSERT INTO touchstone.fixture_tool_responses
     (fixture_set_id, fixture_set_version, call_key, tool_name, arguments,
      response_status, response, observed_at, simulated_latency_ms, sequence)
@@ -28,7 +29,8 @@ VALUES
 ('ab-eval', 1, 'research.deep_search', 'research.deep_search', '{}',
  'SUCCESS',
  '{"question":"宁德时代投资价值综合评估","objective":"多源交叉验证基本面与估值","conclusion":"宁德时代为全球动力电池龙头，半年报营收同比增长稳健、roe 高于行业均值；固态电池技术取得突破但量产节奏存在不确定性；估值 pe_ttm 高于行业中位数，短期资金呈净流出。综合判断：基本面中性偏强，估值偏高，适合已持仓者继续持有、未持仓者等待估值回归。","sources":[{"title":"固态电池最新进展","url":"https://example.com/1"},{"title":"新能源行业分析","url":"https://example.com/2"},{"title":"宁德时代发布半年报","url":"https://example.com/3"}]}',
- '2026-08-19 14:32:00+08', 5, 18);
+ '2026-08-19 14:32:00+08', 5, 18)
+ON CONFLICT DO NOTHING;
 
 UPDATE touchstone.fixture_tool_responses
 SET arguments_hash = 'sha256:' || encode(digest(arguments::text, 'sha256'), 'hex'),
@@ -40,6 +42,7 @@ ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN arguments_hash SET NO
 ALTER TABLE touchstone.fixture_tool_responses ALTER COLUMN response_hash SET NOT NULL;
 
 INSERT INTO touchstone.database_changes (script_name, description)
-VALUES ('20260822-fixture-deep-search.sql', 'GT-2：ab-eval 冻结集补 research.deep_search SUCCESS 冻结行（结论摘要+来源列表）');
+VALUES ('20260822-fixture-deep-search.sql', 'GT-2：ab-eval 冻结集补 research.deep_search SUCCESS 冻结行（结论摘要+来源列表）')
+ON CONFLICT DO NOTHING;
 
 COMMIT;

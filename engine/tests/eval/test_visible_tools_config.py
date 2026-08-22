@@ -168,7 +168,9 @@ def _capture_conditions(
 
     recorder = _sample_recorder("baseline-tool-calling")
 
-    def fake_execute(_request: Any, _catalog: Any, job: Any = None) -> tuple[dict[str, Any], list[Any]]:
+    def fake_execute(
+        _request: Any, _catalog: Any, job: Any = None, llm_config=None
+    ) -> tuple[dict[str, Any], list[Any]]:
         return {"run_records": [{"run_key": recorder.record.run_key, "run_id": None}]}, [recorder.record]
 
     monkeypatch.setattr(run_api, "_execute_eval", fake_execute)

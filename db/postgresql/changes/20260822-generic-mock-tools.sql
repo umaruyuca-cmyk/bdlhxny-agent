@@ -951,6 +951,7 @@ VALUES
 ('mock-eval-v1', 1, 'home.create_automation', 'home.create_automation', '{}',
  'SUCCESS', '{"mock":true,"status":"success","tool_name":"home.create_automation","result_id":"fixed-result-96"}',
  '2026-08-22 09:00:00+08', 5, 95)
+ON CONFLICT DO NOTHING
 ;
 
 -- ── 7. 负例冻结集 mock-eval-negative-v1(每方向空结果+ERROR 各 1;
@@ -1092,6 +1093,7 @@ VALUES
 ('mock-eval-negative-v1', 1, 'device.get_status', 'device.get_status', '{}',
  'ERROR', '{"error":"device offline"}',
  '2026-08-22 09:00:00+08', 5, 41)
+ON CONFLICT DO NOTHING
 ;
 
 UPDATE touchstone.fixture_tool_responses

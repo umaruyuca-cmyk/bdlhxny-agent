@@ -57,8 +57,9 @@ async def test_batch_top_k_overrides_model_reported_value() -> None:
     """设置 search_top_k=2:检索条数固定为 2,模型自报 8 被覆盖(单一变量纪律)。"""
     llm = FakeChatModel([_search_call(), AIMessage(content="已找到工具。")])
     loader = _loader()
-    loop = AgentLoop(llm=llm, catalog=catalog_from_snapshot(seeded_snapshot()), executor=_echo,
-                     loader=loader, search_top_k=2)
+    loop = AgentLoop(
+        llm=llm, catalog=catalog_from_snapshot(seeded_snapshot()), executor=_echo, loader=loader, search_top_k=2
+    )
     result = await _run(loop)
     assert result.entered_loop is True
     assert loader.top_k_calls == [2]
@@ -74,9 +75,7 @@ async def test_default_keeps_model_reported_top_k() -> None:
     assert loader.top_k_calls == [8]
 
 
-def test_search_top_k_persisted_and_validated(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Any
-) -> None:
+def test_search_top_k_persisted_and_validated(monkeypatch: pytest.MonkeyPatch, tmp_path: Any) -> None:
     data = FakeDataClient()
     monkeypatch.setattr(run_api, "_data", lambda: data)
     monkeypatch.setattr(run_api, "ARTIFACTS_DIR", tmp_path)

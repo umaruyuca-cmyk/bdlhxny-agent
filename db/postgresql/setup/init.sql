@@ -896,6 +896,16 @@ CREATE TABLE touchstone.audit_log (
     created_at       TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- 每账号 LLM 接入配置(模型切换功能):API Key 只存库、不出现在任何
+-- 接口响应(仅回尾4位)/日志/运行工件中;base_url/model 为必填。
+CREATE TABLE touchstone.account_llm_configs (
+    account_id   UUID PRIMARY KEY REFERENCES touchstone.accounts(id) ON DELETE CASCADE,
+    base_url     TEXT NOT NULL,
+    model        TEXT NOT NULL,
+    api_key      TEXT,
+    updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE INDEX idx_auth_sessions_account
     ON touchstone.auth_sessions(account_id);
 CREATE INDEX idx_audit_log_account_time
@@ -941,6 +951,18 @@ CREATE TABLE touchstone.tool_capabilities (
     enabled                     BOOLEAN NOT NULL DEFAULT TRUE,
     operations                  JSONB NOT NULL DEFAULT '[]'::jsonb,
     toolsets                    JSONB NOT NULL DEFAULT '[]'::jsonb,
+    -- GT-6 评测轴三列(原 changes/20260822-tool-catalog-extended-fields.sql;
+    -- 2026-08-22 起合入本入口:新库一键初始化即含,该 changes 仅对历史库生效)。
+    -- read_only 仍是治理轴(G2 只读红线);本三列只作 GT-7 判官评测轴。
+    side_effect             VARCHAR(20) NOT NULL DEFAULT 'none'
+        CONSTRAINT tool_capability_side_effect_valid CHECK (
+            side_effect IN ('none', 'write', 'external_action')
+        ),
+    requires_confirmation   BOOLEAN NOT NULL DEFAULT FALSE,
+    risk_level              VARCHAR(10) NOT NULL DEFAULT 'low'
+        CONSTRAINT tool_capability_risk_valid CHECK (
+            risk_level IN ('low', 'medium', 'high')
+        ),
     CONSTRAINT tool_capability_adapter_valid CHECK (
         adapter IN ('mcp', 'java', 'web', 'local')
     ),

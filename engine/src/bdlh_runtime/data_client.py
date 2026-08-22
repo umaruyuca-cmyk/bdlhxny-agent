@@ -180,11 +180,26 @@ class DataClient:
             raise DataServiceError("data service returned an invalid run detail")
         return payload
 
-    def complete_run(self, run_id: str, output: dict[str, Any]) -> None:
+    def complete_run(
+        self,
+        run_id: str,
+        output: dict[str, Any],
+        *,
+        status: str = "COMPLETE",
+        error_category: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        """真实状态透传(架构 §7.1):INVALID/FAILED 运行的 agent_runs.status
+        不再恒为 COMPLETE;能力统计口径仍以 evaluation_results.status 为准。"""
+        payload: dict[str, Any] = {"status": status, "output": output}
+        if error_category:
+            payload["errorCategory"] = error_category
+        if error_message:
+            payload["errorMessage"] = error_message
         self._request(
             "POST",
             f"/runs/{run_id}/complete",
-            json={"status": "COMPLETE", "output": output},
+            json=payload,
             expect_json=False,
         )
 
@@ -213,6 +228,29 @@ class DataClient:
 
     def logout(self, token: str) -> None:
         self._request_raw("POST", "/auth/logout", json={"token": token})
+
+    def get_llm_config(self, account_id: str) -> dict[str, Any] | None:
+        """读取账号 LLM 接入配置(internal 层返回明文 key,供构建客户端)。
+
+        未配置返回 None——调用方回落服务端环境变量。密钥只在此处过手,
+        不得进入日志、fixed_conditions、model_config 或任何工件。
+        """
+        status, response = self._request_raw("GET", f"/llm-configs/{account_id}")
+        if status == 200:
+            return response.json()
+        if status == 404:
+            return None
+        raise DataServiceError(f"data service returned {status} for llm-config", status_code=status)
+
+    def save_llm_config(self, account_id: str, *, base_url: str, model: str, api_key: str | None) -> dict[str, Any]:
+        """保存账号 LLM 接入配置;api_key 为 None=保留旧值,空串=清除。"""
+        payload: dict[str, Any] = {"baseUrl": base_url, "model": model}
+        if api_key is not None:
+            payload["apiKey"] = api_key
+        result = self._request("PUT", f"/llm-configs/{account_id}", json=payload)
+        if not isinstance(result, dict):
+            raise DataServiceError("data service returned an invalid llm-config view")
+        return result
 
     def _request(
         self,

@@ -72,7 +72,7 @@ async def test_cooperative_cancel_stops_new_runs_and_keeps_partial() -> None:
     assert report.skipped_runs == 3  # 期望 4(1 题×2 次×2 组),完成 1
     # 部分完成语义:已完成运行事件流完整
     record = report.run_records[0]
-    assert record.events[-1]["event_type"] == "run.completed"
+    assert record.events[-1]["eventType"] == "run.completed"
 
 
 @pytest.mark.asyncio
@@ -103,7 +103,7 @@ def test_cancel_endpoint_cooperative_and_idempotent(
     monkeypatch.setattr(run_api, "ARTIFACTS_DIR", tmp_path)
     from tests.eval.test_run_api import _sample_recorder
 
-    def fake_execute(request, catalog, job=None):  # noqa: ANN001,ARG001
+    def fake_execute(request, catalog, job=None, llm_config=None):  # noqa: ANN001,ARG001
         # 第一条运行立即完成(部分完成基础),随后模拟运行中等待协作取消
         recorder = _sample_recorder("baseline-tool-calling")
         deadline = time.monotonic() + 5
@@ -162,5 +162,3 @@ def test_max_total_tokens_request_validation(client):  # noqa: ANN001
         headers=_auth(),
     )
     assert response.status_code == 422
-
-

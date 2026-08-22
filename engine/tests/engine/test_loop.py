@@ -165,9 +165,7 @@ async def test_fixed_context_injected_via_builder(registry_snapshot):
             context_items=["两年内换房"],
         )
     )
-    joined = "\n".join(
-        m.content for m in llm.seen[0] if isinstance(m.content, str)
-    )
+    joined = "\n".join(m.content for m in llm.seen[0] if isinstance(m.content, str))
     assert "两年内换房" in joined
     assert "<untrusted-data>" in joined  # 不可信条目由构建器包裹
     assert result.context_report is not None

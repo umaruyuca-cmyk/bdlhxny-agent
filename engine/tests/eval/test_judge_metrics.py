@@ -322,8 +322,13 @@ def test_load_cases_parses_gt7_gold_keys_and_warns_unknown(capsys: pytest.Captur
         },
         "steps": [],
         "variants": [
-            {"variantId": "default", "contextStrategy": "budgeted", "tokenBudget": 4096,
-             "snapshotId": "gt7-01:fixture-v1", "snapshotHash": "sha256:x"}
+            {
+                "variantId": "default",
+                "contextStrategy": "budgeted",
+                "tokenBudget": 4096,
+                "snapshotId": "gt7-01:fixture-v1",
+                "snapshotHash": "sha256:x",
+            }
         ],
     }
     (case,) = load_cases([view])

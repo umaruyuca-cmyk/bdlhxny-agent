@@ -209,7 +209,7 @@ async def test_recording_wrappers_capture_calls_and_events() -> None:
     assert len(tool_rows) == 1
     assert tool_rows[0].status == "SUCCESS"
     assert tool_rows[0].result_hash and tool_rows[0].arguments_hash
-    event_types = [event["event_type"] for event in recorder.record.events]
+    event_types = [event["eventType"] for event in recorder.record.events]
     assert event_types[0] == EVENT_RUN_STARTED
     assert EVENT_MODEL_COMPLETED in event_types
     assert EVENT_TOOL_REQUESTED in event_types
@@ -251,7 +251,7 @@ def test_treatment_audits_block_and_output_guardrail_rows() -> None:
     response_checks = [row for row in recorder.record.guardrail_checks if row.stage == "response"]
     assert response_checks
     assert all(row.decision == "modify" for row in response_checks)
-    assert [event["event_type"] for event in recorder.record.events].count(EVENT_GUARDRAIL_COMPLETED) >= 2
+    assert [event["eventType"] for event in recorder.record.events].count(EVENT_GUARDRAIL_COMPLETED) >= 2
 
 
 def _case() -> ABCase:
@@ -287,7 +287,7 @@ async def test_run_ab_eval_records_three_modes_valid_run() -> None:
     by_mode = {record.agent_mode: record for record in report.run_records}
     assert set(by_mode) == {"baseline-tool-calling", "langgraph-react", "full-system"}
     for record in report.run_records:
-        types = [event["event_type"] for event in record.events]
+        types = [event["eventType"] for event in record.events]
         assert types[0] == EVENT_RUN_STARTED
         assert types[-1] == EVENT_RUN_COMPLETED
         for expected in (
@@ -304,7 +304,7 @@ async def test_run_ab_eval_records_three_modes_valid_run() -> None:
         assert artifact["case"]["variant"] == "default"
     # 完整模式独有:guardrail 事件与治理检查明细
     treatment = by_mode["full-system"]
-    assert EVENT_GUARDRAIL_COMPLETED in [event["event_type"] for event in treatment.events]
+    assert EVENT_GUARDRAIL_COMPLETED in [event["eventType"] for event in treatment.events]
     assert treatment.guardrail_checks
     assert treatment.tool_calls and treatment.tool_calls[0].status == "SUCCESS"
     assert treatment.measurements["totalDurationMs"] >= 0
@@ -343,3 +343,30 @@ async def test_run_ab_eval_429_is_invalid_and_excluded_from_rates() -> None:
 
 def test_prompt_hash_covers_baseline_system() -> None:
     assert payload_hash(BASELINE_SYSTEM).startswith("sha256:")
+
+
+def test_event_payload_keys_match_data_service_contract():
+    """事件行键名必须与 data 服务 RunEventInput(camelCase)对齐。
+
+    回归:此前 emit 用 event_type/occurred_at(snake_case),data 端 Jackson
+    解析为 null → @NotBlank 校验 400,事件落库从未成功(run_events 恒 0 行)。
+    """
+    recorder = RunRecorder(
+        run_key="k",
+        case_id="c",
+        case_version=1,
+        variant_id="default",
+        snapshot_id="s",
+        snapshot_hash="h",
+        agent_mode="baseline-tool-calling",
+        context_strategy="fixed-case-input",
+        model="m",
+        repeat_index=0,
+        message="hi",
+        category="cat",
+    )
+    event = recorder.record.events[0]
+    assert set(event) == {"sequence", "eventType", "payload", "occurredAt"}
+    assert event["eventType"] == EVENT_RUN_STARTED
+    assert isinstance(event["payload"], dict) and event["payload"]
+    assert event["occurredAt"]

@@ -43,9 +43,7 @@ class ScriptedContextModel:
             return AIMessage(content="宁德时代现价 185.50 元,总资产 1000000 元。", response_metadata=usage)
         text = "\n".join(str(getattr(m, "content", "")) for m in messages)
         if "指示灯" in text or "固件" in text:
-            return AIMessage(
-                content="红色常亮代表固件损坏;恢复方式是长按复位键 10 秒。", response_metadata=usage
-            )
+            return AIMessage(content="红色常亮代表固件损坏;恢复方式是长按复位键 10 秒。", response_metadata=usage)
         return AIMessage(
             content="",
             tool_calls=[
@@ -178,10 +176,20 @@ def _views() -> list[dict[str, Any]]:
                 },
             },
             "variants": [
-                {"variantId": "full-raw", "contextStrategy": "full", "tokenBudget": 65536,
-                 "snapshotId": "ctx-mini-port:full-raw:fixture-v1", "snapshotHash": "sha256:p1"},
-                {"variantId": "budgeted-comp", "contextStrategy": "budgeted", "tokenBudget": 3000,
-                 "snapshotId": "ctx-mini-port:budgeted-comp:fixture-v1", "snapshotHash": "sha256:p2"},
+                {
+                    "variantId": "full-raw",
+                    "contextStrategy": "full",
+                    "tokenBudget": 65536,
+                    "snapshotId": "ctx-mini-port:full-raw:fixture-v1",
+                    "snapshotHash": "sha256:p1",
+                },
+                {
+                    "variantId": "budgeted-comp",
+                    "contextStrategy": "budgeted",
+                    "tokenBudget": 3000,
+                    "snapshotId": "ctx-mini-port:budgeted-comp:fixture-v1",
+                    "snapshotHash": "sha256:p2",
+                },
             ],
         },
         {
@@ -203,10 +211,20 @@ def _views() -> list[dict[str, Any]]:
                 },
             },
             "variants": [
-                {"variantId": "full-raw", "contextStrategy": "full", "tokenBudget": 65536,
-                 "snapshotId": "ctx-mini-manual:full-raw:fixture-v1", "snapshotHash": "sha256:m1"},
-                {"variantId": "budgeted-comp", "contextStrategy": "budgeted", "tokenBudget": 2500,
-                 "snapshotId": "ctx-mini-manual:budgeted-comp:fixture-v1", "snapshotHash": "sha256:m2"},
+                {
+                    "variantId": "full-raw",
+                    "contextStrategy": "full",
+                    "tokenBudget": 65536,
+                    "snapshotId": "ctx-mini-manual:full-raw:fixture-v1",
+                    "snapshotHash": "sha256:m1",
+                },
+                {
+                    "variantId": "budgeted-comp",
+                    "contextStrategy": "budgeted",
+                    "tokenBudget": 2500,
+                    "snapshotId": "ctx-mini-manual:budgeted-comp:fixture-v1",
+                    "snapshotHash": "sha256:m2",
+                },
             ],
         },
     ]
@@ -274,7 +292,7 @@ async def test_two_variant_comparison_passes_context_assertions():
         assert record.variant_id in {"full-raw", "budgeted-comp"}
         # 真实构建报告进运行记录与事件流
         assert record.context_build is not None
-        events = {event["event_type"]: event for event in record.events}
+        events = {event["eventType"]: event for event in record.events}
         context_event = events[EVENT_CONTEXT_COMPLETED]
         assert context_event["payload"]["tokenizerVersion"].startswith("conservative-")
         assert context_event["payload"]["requiredRetained"] is True
@@ -344,9 +362,7 @@ async def test_required_overflow_marks_run_invalid():
     tight = [
         case
         if not (case.case_id == "ctx-mini-port" and case.variant_id == "budgeted-comp")
-        else ContextVariantCase(
-            **{**case.__dict__, "token_budget": 10}
-        )
+        else ContextVariantCase(**{**case.__dict__, "token_budget": 10})
         for case in cases
     ]
     report = await run_context_eval(

@@ -63,6 +63,40 @@ ORDER BY applied_at;
 | 7 | `07-create-tool-catalog-tables` | 创建工具目录表并写入操作证、工具集、能力和技能 |
 | 8 | `08-seed-tool-fixtures` | 写入 A/B 评测冻结工具返回（ab-eval 数据集） |
 
+## 新库需要的后续变更脚本
+
+`init.sql` 只建立基础结构：18 道首批用例、金融 16 工具与 `ab-eval` 冻结集。
+以下功能数据自 2026-08-22 起通过 `../changes/` 脚本提供，且**相关代码已依赖它们**
+（data 服务的 `/internal/v1/tool-catalog` 直接读取 `tool_capabilities` 的
+`side_effect/requires_confirmation/risk_level` 三列；该三列已合入 init.sql 建表语句，
+新库**不需要**再执行 `20260822-tool-catalog-extended-fields.sql`——它仅用于
+2026-08-22 之前初始化的历史库）。新库推荐执行链：
+
+| 顺序 | 脚本 | 作用 | 是否必需 |
+|---:|---|---|---|
+| 1 | `../changes/20260822-generic-mock-tools.sql` | 96 个通用 Mock 工具 + mock-eval-v1/负例两冻结集 | 必需（tool-catalog 三列的目录数据） |
+| 2 | `../changes/20260822-generic-phase1-cases.sql` | 首批 72 道 gt8-* 通用目录用例 | 依赖 1 |
+| 3 | `../changes/20260821-long-context-cases.sql` | 6 套 ctx-* 长上下文压缩对照用例 | 需要压缩对照时 |
+| 4 | `../changes/20260822-fixture-negative.sql` | 金融负例集 ab-eval-negative-v1 + 8 道负例 | 需要负例实验时 |
+| 5 | `../changes/20260822-fixture-deep-search.sql` | ab-eval 补 research.deep_search 冻结行 | 幂等，建议执行 |
+
+不执行第 1 项时，题库只有 18 道基础用例、冻结集只有 `ab-eval`，
+`/lab` 的通用工具勾选页与 `gt8-*` 用例均不可用。
+
+## 托管 PostgreSQL 的权限提示
+
+`init.sql` 与全部 changes 脚本不包含任何 `GRANT`：本地 Docker 路径下
+`POSTGRES_USER` 与 data 服务使用同一数据库属主用户，无需额外授权。托管
+PostgreSQL 场景若用管理员用户执行初始化、而 data 服务使用独立应用用户连接，
+必须另行授权，否则 data 服务启动后所有查询都会因无权限失败：
+
+```sql
+GRANT USAGE ON SCHEMA touchstone TO <应用用户>;
+GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA touchstone TO <应用用户>;
+ALTER DEFAULT PRIVILEGES IN SCHEMA touchstone
+  GRANT SELECT, INSERT, UPDATE ON TABLES TO <应用用户>;
+```
+
 ## 创建初始所有者账号
 
 `init.sql` 不写入任何账号或密码。首个所有者账号由维护者在目标数据库上手动

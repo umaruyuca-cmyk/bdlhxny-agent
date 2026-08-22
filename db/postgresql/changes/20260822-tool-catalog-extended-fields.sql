@@ -1,6 +1,10 @@
 -- 20260822-tool-catalog-extended-fields.sql
 -- GT-6：工具能力表扩展评测轴三列(副作用/需确认/风险级别)。
 --
+-- 适用范围(2026-08-22 更新)：本脚本仅用于 2026-08-22 之前初始化的历史库；
+-- 自 2026-08-22 起 setup/init.sql 建表已直接包含这三列，新库不再执行本脚本。
+-- 幂等：ADD COLUMN IF NOT EXISTS，列已存在时整段跳过，可安全重跑。
+--
 -- 设计取舍(见任务清单修订记录 2026-08-22(九)):
 --   read_only 保持为治理轴(G2 只读红线)不动;side_effect 是评测轴新列,
 --   供判官(GT-7)计算未确认写入率/查询误用写入率等指标。
@@ -20,12 +24,12 @@ SET LOCAL lock_timeout = '5s';
 SET LOCAL statement_timeout = '1min';
 
 ALTER TABLE touchstone.tool_capabilities
-  ADD COLUMN side_effect VARCHAR(20) NOT NULL DEFAULT 'none'
+  ADD COLUMN IF NOT EXISTS side_effect VARCHAR(20) NOT NULL DEFAULT 'none'
     CONSTRAINT tool_capability_side_effect_valid CHECK (
         side_effect IN ('none', 'write', 'external_action')
     ),
-  ADD COLUMN requires_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
-  ADD COLUMN risk_level VARCHAR(10) NOT NULL DEFAULT 'low'
+  ADD COLUMN IF NOT EXISTS requires_confirmation BOOLEAN NOT NULL DEFAULT FALSE,
+  ADD COLUMN IF NOT EXISTS risk_level VARCHAR(10) NOT NULL DEFAULT 'low'
     CONSTRAINT tool_capability_risk_valid CHECK (
         risk_level IN ('low', 'medium', 'high')
     );

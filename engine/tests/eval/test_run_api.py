@@ -16,6 +16,7 @@ class FakeDataClient:
     def __init__(self) -> None:
         self.created_runs: list[dict[str, Any]] = []
         self.completed: list[str] = []
+        self.completed_payloads: list[dict[str, Any]] = []
         self.saved_events: list[tuple[str, list[dict[str, Any]]]] = []
         self.saved_model_calls: list[tuple[str, list[dict[str, Any]]]] = []
         self.saved_tool_calls: list[tuple[str, list[dict[str, Any]]]] = []
@@ -24,6 +25,9 @@ class FakeDataClient:
         self.saved_artifacts: list[tuple[str, dict[str, Any]]] = []
         self.evaluations: list[tuple[str, dict[str, Any]]] = []
         self.saved_context_builds: list[tuple[str, dict[str, Any]]] = []
+
+    def get_llm_config(self, account_id: str) -> dict[str, Any] | None:
+        return None
 
     def get_case_variant_context(self, case_id: str, version: int, variant_id: str) -> dict[str, Any]:
         return {
@@ -57,7 +61,8 @@ class FakeDataClient:
         self.saved_context_builds.append((run_id, build))
 
     def list_cases(self) -> list[dict[str, Any]]:
-        return [            {
+        return [
+            {
                 "id": "research-01",
                 "version": 1,
                 "title": "实时行情工具选择",
@@ -175,9 +180,18 @@ class FakeDataClient:
     def save_evaluation(self, run_id: str, **payload: Any) -> None:
         self.evaluations.append((run_id, payload))
 
-    def complete_run(self, run_id: str, output: dict[str, Any]) -> None:
+    def complete_run(
+        self,
+        run_id: str,
+        output: dict[str, Any],
+        *,
+        status: str = "COMPLETE",
+        error_category: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
         assert "judgment" in output
         self.completed.append(run_id)
+        self.completed_payloads.append({"run_id": run_id, "status": status, "error_category": error_category})
 
 
 def _sample_recorder(agent_mode: str, *, status: str = "COMPLETE", error_category: str | None = None) -> RunRecorder:
@@ -308,7 +322,9 @@ def test_batch_persists_stepwise_records_for_each_mode(
         _sample_recorder("full-system"),
     ]
 
-    def fake_execute(_request: Any, _catalog: Any, job: Any = None) -> tuple[dict[str, Any], list[Any]]:
+    def fake_execute(
+        _request: Any, _catalog: Any, job: Any = None, llm_config=None
+    ) -> tuple[dict[str, Any], list[Any]]:
         payload = {
             "cases": [
                 {
@@ -319,9 +335,7 @@ def test_batch_persists_stepwise_records_for_each_mode(
                     "lineage": [],
                 }
             ],
-            "run_records": [
-                {"run_key": recorder.record.run_key, "run_id": None} for recorder in recorders
-            ],
+            "run_records": [{"run_key": recorder.record.run_key, "run_id": None} for recorder in recorders],
         }
         return payload, [recorder.record for recorder in recorders]
 
@@ -347,7 +361,7 @@ def test_batch_persists_stepwise_records_for_each_mode(
 
     # 事件流与测量逐运行写入
     assert len(fake_data.saved_events) == 3
-    assert all(events and events[0]["event_type"] == "run.started" for _run_id, events in fake_data.saved_events)
+    assert all(events and events[0]["eventType"] == "run.started" for _run_id, events in fake_data.saved_events)
     assert len(fake_data.saved_measurements) == 3
     assert len(fake_data.evaluations) == 3
     assert all(payload["valid_run"] for _run_id, payload in fake_data.evaluations)
@@ -378,10 +392,10 @@ def test_invalid_run_is_not_marked_valid(
     monkeypatch.setattr(run_api, "ARTIFACTS_DIR", tmp_path)
     recorder = _sample_recorder("baseline-tool-calling", status="INVALID", error_category="RATE_LIMITED")
 
-    def fake_execute(_request: Any, _catalog: Any, job: Any = None) -> tuple[dict[str, Any], list[Any]]:
-        return {"cases": [], "run_records": [{"run_key": recorder.record.run_key, "run_id": None}]}, [
-            recorder.record
-        ]
+    def fake_execute(
+        _request: Any, _catalog: Any, job: Any = None, llm_config=None
+    ) -> tuple[dict[str, Any], list[Any]]:
+        return {"cases": [], "run_records": [{"run_key": recorder.record.run_key, "run_id": None}]}, [recorder.record]
 
     monkeypatch.setattr(run_api, "_execute_eval", fake_execute)
     response = client.post(
@@ -394,6 +408,9 @@ def test_invalid_run_is_not_marked_valid(
     assert job["status"] == "done"
     assert fake_data.evaluations[0][1]["valid_run"] is False
     assert fake_data.evaluations[0][1]["status"] == "INVALID"
+    # agent_runs.status 同源透传(不再恒 COMPLETE):状态与错误类别一并落库
+    assert fake_data.completed_payloads[0]["status"] == "INVALID"
+    assert fake_data.completed_payloads[0]["error_category"] == "RATE_LIMITED"
     assert fake_data.saved_artifacts[0][1]["content_hash"].startswith("sha256:")
     assert (tmp_path / "runs" / "run-1.json").is_file()
 
@@ -476,14 +493,12 @@ def test_context_batch_persists_variant_runs(
                     "decisionOrder": 0,
                 }
             ],
-            "messages": [
-                {"messageOrder": 0, "role": "system", "content": "s", "contentHash": "sha256:m", "tokens": 1}
-            ],
+            "messages": [{"messageOrder": 0, "role": "system", "content": "s", "contentHash": "sha256:m", "tokens": 1}],
         }
     )
     recorder.complete(status="COMPLETE")
 
-    def fake_execute(_request: Any, _views: Any, _selected: Any) -> tuple[dict[str, Any], list[Any]]:
+    def fake_execute(_request: Any, _views: Any, _selected: Any, llm_config=None) -> tuple[dict[str, Any], list[Any]]:
         return {
             "case_count": 1,
             "by_variant": {},
@@ -520,3 +535,20 @@ def test_context_batch_rejects_non_comparison_cases(client: TestClient) -> None:
         headers=_auth(),
     )
     assert response.status_code == 400
+
+
+def test_select_case_views_filters_ids_and_skips_ctx_variants() -> None:
+    """case_ids 必须真正过滤执行列表;全部题目时跳过无 default 变体的 ctx 用例。
+
+    回归:此前 case_ids 只校验不过滤,目录含 ctx-* 用例(无 default 变体)时
+    load_cases 直接抛"没有 default 变体",任何批次都失败。
+    """
+    catalog = [
+        {"id": "research-01", "variants": [{"variantId": "default"}]},
+        {"id": "ctx-port-01", "variants": [{"variantId": "full-raw"}, {"variantId": "budgeted-comp"}]},
+        {"id": "chat-01", "variants": [{"variantId": "default"}]},
+    ]
+    picked = run_api._select_case_views(catalog, ["research-01", "ctx-port-01"])
+    assert [view["id"] for view in picked] == ["research-01", "ctx-port-01"]
+    default_only = run_api._select_case_views(catalog, None)
+    assert [view["id"] for view in default_only] == ["research-01", "chat-01"]

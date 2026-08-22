@@ -26,11 +26,11 @@ def test_build_llm_reads_env_base_url(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("LLM_BASE_URL", "https://gateway.example.internal/v1")
     captured = _capture_create_llm(monkeypatch)
 
-    llm = ab_eval.build_llm_from_env("glm-4.7-flash")
+    llm = ab_eval.build_llm_from_env("Qwen/Qwen3.6-35B-A3B")
 
     assert llm is not None
     assert captured["base_url"] == "https://gateway.example.internal/v1"
-    assert captured["model"] == "glm-4.7-flash"
+    assert captured["model"] == "Qwen/Qwen3.6-35B-A3B"
     assert captured["api_key"] == "test-key"
 
 
@@ -56,4 +56,4 @@ def test_request_model_defaults_to_env(monkeypatch: pytest.MonkeyPatch) -> None:
     assert EvalBatchRequest().model == "glm-4.7"
 
     monkeypatch.delenv("LLM_MODEL", raising=False)
-    assert EvalBatchRequest().model == "glm-4.7-flash"
+    assert EvalBatchRequest().model == "Qwen/Qwen3.6-35B-A3B"

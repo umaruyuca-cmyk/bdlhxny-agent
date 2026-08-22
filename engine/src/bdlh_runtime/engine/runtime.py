@@ -139,9 +139,7 @@ def _execution_from_result(event: InputEvent, result: AgentResult) -> CognitiveE
             answer = EMPTY_ANSWER_REASON
             if EMPTY_ANSWER_AUDIT not in audits:
                 audits.append(EMPTY_ANSWER_AUDIT)
-            logger.warning(
-                "run %s: 空答案（非降级路径），audit=%s", event.run_id or event.event_id, EMPTY_ANSWER_AUDIT
-            )
+            logger.warning("run %s: 空答案（非降级路径），audit=%s", event.run_id or event.event_id, EMPTY_ANSWER_AUDIT)
     public_events: list[str] = []
     if kind == "BLOCKED":
         public_events.append("guardrail.blocked")

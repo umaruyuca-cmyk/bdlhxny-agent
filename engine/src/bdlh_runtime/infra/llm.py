@@ -1,8 +1,7 @@
 """大模型客户端封装。
 
 本项目通过 langchain-openai 的 ChatOpenAI 接入 OpenAI 兼容接口。
-端点与模型由调用方从环境变量读取（``LLM_BASE_URL`` / ``LLM_MODEL``，缺省智谱
-GLM-4.7 ``https://open.bigmodel.cn/api/paas/v4``）。
+端点与模型由调用方从环境变量读取（``LLM_BASE_URL`` / ``LLM_MODEL``，缺省硅基流动 ``https://api.siliconflow.cn/v1``）。
 所有需要 LLM 的 Agent 都通过本模块获取客户端实例，不在各自模块里重复初始化。
 
 降级策略：没有 API Key 时 create_llm 返回 None，调用方据此降级为规则替身。
@@ -15,8 +14,8 @@ from typing import Any
 
 logger = logging.getLogger("bdlh_runtime.infra.llm")
 
-DEFAULT_LLM_BASE_URL = "https://open.bigmodel.cn/api/paas/v4"
-DEFAULT_LLM_MODEL = "glm-4.7"
+DEFAULT_LLM_BASE_URL = "https://api.siliconflow.cn/v1"
+DEFAULT_LLM_MODEL = "Qwen/Qwen3.6-35B-A3B"
 
 
 def create_llm(
@@ -27,7 +26,7 @@ def create_llm(
     temperature: float = 0.1,
     timeout: float = 30.0,
 ) -> Any | None:
-    """创建 ChatOpenAI 实例（OpenAI 兼容，默认 GLM-4.7）。
+    """创建 ChatOpenAI 实例（OpenAI 兼容，默认 Qwen/Qwen3.6-35B-A3B）。
 
     返回 None 的情况：
     - api_key 为空（未配置 LLM_API_KEY）；

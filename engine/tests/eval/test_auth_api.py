@@ -48,6 +48,7 @@ def test_login_returns_session(client: TestClient) -> None:
     assert response.status_code == 200
     assert response.json()["token"] == "token-value"
     assert response.json()["expires_at"] == "2026-08-21T00:00:00Z"
+    assert response.json()["username"] == "owner"
 
 
 def test_login_forwards_client_metadata(client: TestClient, fake_auth: FakeAuthData) -> None:

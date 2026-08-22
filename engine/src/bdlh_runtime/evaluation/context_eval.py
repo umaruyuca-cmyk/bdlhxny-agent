@@ -129,9 +129,7 @@ def load_context_variant_cases(
         fastpath = checks.get("fastpath")
         for variant in wanted:
             variant_id = str(variant["variantId"])
-            context_payload = data.get_case_variant_context(
-                str(view["id"]), int(view.get("version") or 1), variant_id
-            )
+            context_payload = data.get_case_variant_context(str(view["id"]), int(view.get("version") or 1), variant_id)
             items = tuple(context_payload.get("items") or [])
             if not items:
                 raise ValueError(f"变体 {view['id']}/{variant_id} 无上下文条目,无法执行压缩对照")
@@ -312,22 +310,16 @@ def judge_context_run(
         judgment.working_tokens = report.working_tokens
     required_facts = dict(expectations.get("required_facts") or {})
     missing = [
-        key
-        for key, value in required_facts.items()
-        if (fact := _stringify_fact(value)) and fact not in working_text
+        key for key, value in required_facts.items() if (fact := _stringify_fact(value)) and fact not in working_text
     ]
     judgment.missing_required_facts = missing
     forbidden_facts = dict(expectations.get("forbidden_facts") or {})
     leaked = [
-        key
-        for key, value in forbidden_facts.items()
-        if (fact := _stringify_fact(value)) and fact in fixed_answer
+        key for key, value in forbidden_facts.items() if (fact := _stringify_fact(value)) and fact in fixed_answer
     ]
     judgment.forbidden_facts_in_answer = leaked
     injection_keys = list(expectations.get("injection_items") or [])
-    untrusted_keys = {
-        str(row.get("itemKey")) for row in case.fixture_items if row.get("untrusted")
-    }
+    untrusted_keys = {str(row.get("itemKey")) for row in case.fixture_items if row.get("untrusted")}
     watch_keys = [key for key in injection_keys if key in untrusted_keys] or sorted(untrusted_keys)
     instruction = _instruction_text(agent_result)
     injection_violations = [key for key in watch_keys if key and key in instruction]
@@ -367,14 +359,14 @@ class VariantRunOutcome:
 class ContextEvalReport:
     case_count: int
     variant_runs: list[VariantRunOutcome] = field(default_factory=list)
-    model: str = "glm-4.7-flash"
+    model: str = "Qwen/Qwen3.6-35B-A3B"
     run_records: list[RunRecord] = field(default_factory=list)
 
 
 async def run_context_eval(
     cases: list[ContextVariantCase],
     llm: Any | None = None,
-    model: str = "glm-4.7-flash",
+    model: str = "Qwen/Qwen3.6-35B-A3B",
     *,
     catalog: ToolCatalog | None = None,
     frozen: FrozenObservations | None = None,
@@ -530,9 +522,7 @@ async def run_context_eval(
             if status == "COMPLETE":
                 recorder.record_output(answer_excerpt=fixed_answer, audit_codes=[])
             recorder.complete(status=status, error_category=category or None, error_text=judgment.error)
-            recorder.record.visible_tools = (
-                list(agent_result.loaded_tools) if agent_result.loaded_tools else []
-            )
+            recorder.record.visible_tools = list(agent_result.loaded_tools) if agent_result.loaded_tools else []
             report.variant_runs.append(
                 VariantRunOutcome(
                     case_id=case.case_id,
@@ -675,7 +665,7 @@ def _report_payload(report: ContextEvalReport) -> dict[str, Any]:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="长上下文压缩对照")
     parser.add_argument("--runs", type=int, default=1, help="每变体重复次数")
-    parser.add_argument("--model", type=str, default=os.getenv("LLM_MODEL", "glm-4.7-flash"))
+    parser.add_argument("--model", type=str, default=os.getenv("LLM_MODEL", "Qwen/Qwen3.6-35B-A3B"))
     parser.add_argument("--no-write-report", action="store_true")
     args = parser.parse_args(argv)
 
@@ -684,9 +674,7 @@ def main(argv: list[str] | None = None) -> int:
     if not cases:
         print("库内没有 ctx-* 对照变体;先执行 changes/20260821-long-context-cases.sql")
         return 1
-    report = asyncio.run(
-        run_context_eval(cases=cases, model=args.model, runs_per_variant=args.runs, data=data)
-    )
+    report = asyncio.run(run_context_eval(cases=cases, model=args.model, runs_per_variant=args.runs, data=data))
     md = render_markdown(report)
     if not args.no_write_report:
         out = _REPO_ROOT / "docs" / "eval" / f"{date.today().strftime('%Y%m%d')}_长上下文压缩对照.md"

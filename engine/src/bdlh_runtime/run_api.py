@@ -30,6 +30,7 @@ from bdlh_runtime.evaluation.run_telemetry import (
     validity_of,
     verify_artifact_hash,
 )
+from bdlh_runtime.infra.llm import DEFAULT_LLM_BASE_URL, create_llm
 
 ARTIFACTS_DIR = Path(os.getenv("ARTIFACTS_DIR", "/app/artifacts"))
 
@@ -89,7 +90,7 @@ class EvalBatchRequest(BaseModel):
     runs: int = Field(default=1, ge=1, le=5, description="每题每种实现的重复次数")
     include_react: bool = Field(default=True, description="是否包含 LangGraph ReAct 实现")
     model: str = Field(
-        default_factory=lambda: os.getenv("LLM_MODEL", "glm-4.7-flash"),
+        default_factory=lambda: os.getenv("LLM_MODEL", "Qwen/Qwen3.6-35B-A3B"),
         min_length=1,
         max_length=100,
         description="模型名；缺省取 LLM_MODEL 环境变量（唯一请求级可配项，base_url 与密钥只在服务端环境变量）",
@@ -131,7 +132,7 @@ class ContextBatchRequest(BaseModel):
     case_ids: list[str] | None = Field(default=None, max_length=100, description="ctx 用例子集;空表示全部对照变体")
     runs: int = Field(default=1, ge=1, le=5, description="每变体重复次数")
     model: str = Field(
-        default_factory=lambda: os.getenv("LLM_MODEL", "glm-4.7-flash"),
+        default_factory=lambda: os.getenv("LLM_MODEL", "Qwen/Qwen3.6-35B-A3B"),
         min_length=1,
         max_length=100,
     )
@@ -164,7 +165,12 @@ def login(request: LoginRequest, http_request: Request) -> dict[str, Any]:
         )
     except DataServiceError as exc:
         raise HTTPException(status_code=exc.status_code or 401, detail=str(exc)) from exc
-    return {"token": result["token"], "expires_at": result["expiresAt"]}
+    return {
+        "token": result["token"],
+        "expires_at": result["expiresAt"],
+        # lab 顶栏 whoami 展示用（data 服务 LoginResponse 已含，此前被丢弃）
+        "username": str(result.get("username") or ""),
+    }
 
 
 @app.post("/api/v1/logout")
@@ -210,6 +216,96 @@ def list_tools(account: Annotated[dict[str, Any], Depends(require_login)]) -> li
     return tools
 
 
+class LlmConfigUpdate(BaseModel):
+    """模型切换:按账号保存 LLM 接入配置。apiKey 选填——None=保留旧值,空串=清除。"""
+
+    model_config = ConfigDict(extra="forbid")
+
+    base_url: str = Field(min_length=1, max_length=300)
+    model: str = Field(min_length=1, max_length=100)
+    api_key: str | None = Field(default=None, max_length=300)
+
+
+@app.get("/api/v1/llm-config")
+def get_llm_config(account: Annotated[dict[str, Any], Depends(require_login)]) -> dict[str, Any]:
+    """当前账号的 LLM 接入配置(脱敏:仅密钥尾 4 位,永不回明文)。"""
+    try:
+        cfg = _data().get_llm_config(str(account["accountId"]))
+    except DataServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    if cfg is None:
+        return {"configured": False, "model": os.getenv("LLM_MODEL", "Qwen/Qwen3.6-35B-A3B")}
+    api_key = cfg.get("apiKey")
+    return {
+        "configured": True,
+        "baseUrl": cfg.get("baseUrl"),
+        "model": cfg.get("model"),
+        "hasApiKey": bool(api_key),
+        "keyLast4": api_key[-4:] if api_key and len(api_key) >= 4 else None,
+    }
+
+
+@app.put("/api/v1/llm-config")
+def save_llm_config(
+    request: LlmConfigUpdate, account: Annotated[dict[str, Any], Depends(require_login)]
+) -> dict[str, Any]:
+    try:
+        _data().save_llm_config(
+            str(account["accountId"]), base_url=request.base_url, model=request.model, api_key=request.api_key
+        )
+    except DataServiceError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return get_llm_config(account)
+
+
+@app.post("/api/v1/llm-config/test")
+def test_llm_config(
+    account: Annotated[dict[str, Any], Depends(require_login)],
+    request: LlmConfigUpdate | None = None,
+) -> dict[str, Any]:
+    """连通性验证:用已存配置(或请求体临时配置)发起一次最小补全调用。
+
+    请求体可省——省略时测试已存配置;密钥解析顺序:请求体 → 已存 → 服务端环境。
+    """
+    cfg: dict[str, Any] = {}
+    if request is not None:
+        cfg = {"baseUrl": request.base_url, "model": request.model, "apiKey": request.api_key}
+    else:
+        try:
+            cfg = _data().get_llm_config(str(account["accountId"])) or {}
+        except DataServiceError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+    base_url = (cfg.get("baseUrl") or os.getenv("LLM_BASE_URL") or DEFAULT_LLM_BASE_URL).rstrip("/")
+    model = cfg.get("model") or os.getenv("LLM_MODEL", "Qwen/Qwen3.6-35B-A3B")
+    api_key = cfg.get("apiKey") or os.getenv("LLM_API_KEY") or ""
+    if not api_key:
+        return {"ok": False, "error": "未配置 API Key(保存时填写,或服务端环境变量 LLM_API_KEY)"}
+    ok, detail = _probe_llm(base_url, model, api_key)
+    return {"ok": ok, "model": model, "baseUrl": base_url, "detail": detail}
+
+
+def _probe_llm(base_url: str, model: str, api_key: str) -> tuple[bool, str]:
+    """最小连通性调用;错误信息面向页面展示,不含密钥。"""
+    import httpx
+
+    try:
+        response = httpx.post(
+            f"{base_url}/chat/completions",
+            headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
+            json={"model": model, "messages": [{"role": "user", "content": "ping"}], "max_tokens": 4},
+            timeout=20.0,
+        )
+    except httpx.HTTPError as exc:
+        return False, f"无法连接 {base_url}({type(exc).__name__})"
+    if response.status_code == 200:
+        return True, "连接成功,模型可用"
+    try:
+        message = str(response.json().get("error", {}).get("message", response.text[:120]))
+    except ValueError:
+        message = response.text[:120]
+    return False, f"HTTP {response.status_code}: {message}"
+
+
 @app.post("/api/v1/eval-batches")
 def start_eval_batch(
     request: EvalBatchRequest,
@@ -247,6 +343,16 @@ def start_eval_batch(
             _BATCH_SLOTS.release()
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    # 模型切换:读取发起者的 LLM 接入配置(未配置/读取失败→None,执行时回落 env)
+    try:
+        llm_config = data.get_llm_config(str(account["accountId"]))
+    except DataServiceError:
+        llm_config = None
+    if llm_config and llm_config.get("model"):
+        # 配置存在时以账号绑定的模型为准——请求默认值来自服务端 env,
+        # 与账号配置(可能另一提供商)不一致会把错误模型名发给对方端点
+        request = request.model_copy(update={"model": str(llm_config["model"])})
+
     job_id = uuid4().hex[:12]
     job: dict[str, Any] = {
         "job_id": job_id,
@@ -262,7 +368,7 @@ def start_eval_batch(
 
     def task() -> None:
         try:
-            payload, run_records = _execute_eval(request, catalog, job=job)
+            payload, run_records = _execute_eval(request, catalog, job=job, llm_config=llm_config)
             _persist_runs(data, batch_id, request, payload, run_records)
             _persist_artifact(batch_id, payload)
             batch_status = "CANCELLED" if payload.get("stop_reason") == "CANCELLED" else "COMPLETE"
@@ -317,10 +423,7 @@ def start_context_batch(
         known = {
             str(view["id"])
             for view in views
-            if any(
-                str(item.get("variantId")) in COMPARISON_VARIANTS
-                for item in view.get("variants") or []
-            )
+            if any(str(item.get("variantId")) in COMPARISON_VARIANTS for item in view.get("variants") or [])
         }
         unknown = [case_id for case_id in request.case_ids or [] if case_id not in known]
         if unknown:
@@ -400,22 +503,54 @@ def _execute_eval(
     request: EvalBatchRequest,
     catalog: list[dict[str, Any]],
     job: dict[str, Any] | None = None,
+    llm_config: dict[str, Any] | None = None,
 ) -> tuple[dict[str, Any], list[RunRecord]]:
+    # 模型切换:按发起者配置构建客户端(密钥只在此处使用,不进任何记录);
+    # 未配置/缺密钥 → llm=None → run_ab_eval 回落服务端环境变量
+    llm = None
+    if llm_config:
+        api_key = llm_config.get("apiKey") or os.getenv("LLM_API_KEY")
+        if api_key:
+            llm = create_llm(
+                api_key=api_key,
+                # 客户端模型以账号配置为准(与 start_eval_batch 的归一保持同源)
+                model=str(llm_config.get("model") or request.model),
+                base_url=str(llm_config.get("baseUrl") or DEFAULT_LLM_BASE_URL),
+            )
+
     async def run() -> Any:
         return await run_ab_eval(
             runs_per_case=request.runs,
             model=request.model,
             with_react=request.include_react,
-            cases=load_cases(catalog),
+            cases=load_cases(_select_case_views(catalog, request.case_ids)),
+            llm=llm,
             should_stop=(lambda: bool(job.get("cancel_requested"))) if job is not None else None,
             max_total_tokens=_max_total_tokens(request),
             fixture_set_id=request.fixture_set_id or "ab-eval",
             visible_tools=request.visible_tools,
             search_top_k=request.search_top_k,
+            # 低 RPM 档账号的限流缓解:拉大运行间间隔(缺省 1s;环境变量可覆盖)
+            inter_run_delay_s=float(os.getenv("EVAL_INTER_RUN_DELAY_S", "1")),
         )
 
     report = asyncio.run(run())
     return _report_payload(report), report.run_records
+
+
+def _select_case_views(catalog: list[dict[str, Any]], case_ids: list[str] | None) -> list[dict[str, Any]]:
+    """按请求题号过滤执行用例;未指定=全部(仅含带 default 变体的用例)。
+
+    ctx-* 压缩对照用例只有 full-raw/budgeted-comp 变体、无 default 变体,
+    属 context-batches 通道,不进编排批次——此前 case_ids 未过滤执行列表,
+    目录一旦含无 default 变体的用例,load_cases 即抛"没有 default 变体"。
+    """
+    if case_ids:
+        wanted = set(case_ids)
+        return [view for view in catalog if str(view.get("id")) in wanted]
+    return [
+        view for view in catalog if any(str(item.get("variantId")) == "default" for item in view.get("variants") or [])
+    ]
 
 
 def _max_total_tokens(request: EvalBatchRequest | ContextBatchRequest) -> int | None:
@@ -461,9 +596,7 @@ def _execute_context_eval(
 
     data = _data()
     cases = [case for case in load_context_variant_cases(views, data) if case.case_id in set(selected)]
-    report = asyncio.run(
-        run_context_eval(cases=cases, model=request.model, runs_per_variant=request.runs, data=data)
-    )
+    report = asyncio.run(run_context_eval(cases=cases, model=request.model, runs_per_variant=request.runs, data=data))
     return context_report_payload(report), report.run_records
 
 
@@ -565,6 +698,9 @@ def _persist_one_run(
             "error_category": error_category,
             "judgment": record.judgment,
         },
+        # 真实状态透传:agent_runs.status 与 evaluation_results.status 同源
+        status=status,
+        error_category=error_category,
     )
     record.status = status
     record.error_category = error_category

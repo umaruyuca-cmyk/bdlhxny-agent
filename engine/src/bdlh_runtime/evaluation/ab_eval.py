@@ -118,10 +118,21 @@ def _default_variant(view: dict[str, Any]) -> dict[str, Any]:
 #: expected_checks 已知金标键(种子/ctx 用例/GT-3/GT-7);未知键告警不拒收。
 _KNOWN_CHECK_KEYS = frozenset(
     {
-        "category", "expected_tools", "absent_tools", "fastpath",
-        "forbidden_actions", "forbidden_facts", "required_context",
-        "context_expectations", "fixture_only", "expected_behavior", "note",
-        "expected_params", "expected_order", "expected_search", "confirmation_present",
+        "category",
+        "expected_tools",
+        "absent_tools",
+        "fastpath",
+        "forbidden_actions",
+        "forbidden_facts",
+        "required_context",
+        "context_expectations",
+        "fixture_only",
+        "expected_behavior",
+        "note",
+        "expected_params",
+        "expected_order",
+        "expected_search",
+        "confirmation_present",
     }
 )
 
@@ -338,7 +349,7 @@ class ABReport:
     treatment: GroupSummary
     react: GroupSummary | None = None
     cases: list[CaseReport] = field(default_factory=list)
-    model: str = "glm-4.7"
+    model: str = "Qwen/Qwen3.6-35B-A3B"
     executor: str = "frozen"
     fixture_set_id: str = FIXTURE_SET_ID
     # GT-4 可见集实验变量:None=按场景默认(裸调用/ReAct=目录全量,完整模式=scoped)
@@ -711,9 +722,7 @@ def _summarize(runs: list[RunJudgment]) -> GroupSummary:
         reasons[key] = reasons.get(key, 0) + 1
     n = len(valid)
     if n == 0:
-        return GroupSummary(
-            total_runs=len(runs), valid_runs=0, invalid_runs=len(invalid), invalid_reasons=reasons
-        )
+        return GroupSummary(total_runs=len(runs), valid_runs=0, invalid_runs=len(invalid), invalid_reasons=reasons)
     durations = sorted(r.duration_ms for r in valid)
     p95_index = max(0, min(n - 1, (95 * n + 99) // 100 - 1))
     precision_values = [r.selection_precision for r in valid if r.selection_precision is not None]
@@ -757,9 +766,7 @@ def _summarize(runs: list[RunJudgment]) -> GroupSummary:
         invalid_search_rate=sum(1 for r in valid if r.invalid_search) / n,
         duplicate_search_rate=sum(1 for r in valid if r.duplicate_search) / n,
         search_then_correct_rate=(
-            (sum(1 for v in search_correct_values if v) / len(search_correct_values))
-            if search_correct_values
-            else None
+            (sum(1 for v in search_correct_values if v) / len(search_correct_values)) if search_correct_values else None
         ),
         mean_tools_schema_tokens=sum(r.tools_schema_tokens for r in valid) // n,
     )
@@ -846,9 +853,7 @@ def _attach_context_build(recorder: RunRecorder, result: AgentResult) -> None:
 
     if result.context_build_result is None:
         # 罐头快路径未发生模型输入,无构建;如实记录
-        recorder.record_context(
-            {"strategy": "fixed-case-input", "status": "SKIPPED", "note": "罐头快路径,无模型输入"}
-        )
+        recorder.record_context({"strategy": "fixed-case-input", "status": "SKIPPED", "note": "罐头快路径,无模型输入"})
         return
     build = context_build_payload(
         result.context_build_result,
@@ -874,7 +879,7 @@ def _attach_context_build(recorder: RunRecorder, result: AgentResult) -> None:
 async def run_ab_eval(
     runs_per_case: int = 5,
     llm: Any | None = None,
-    model: str = "glm-4.7-flash",
+    model: str = "Qwen/Qwen3.6-35B-A3B",
     with_react: bool = True,
     cases: list[ABCase] | None = None,
     *,
@@ -1187,7 +1192,8 @@ async def run_ab_eval(
         model=model,
         executor="frozen",
         fixture_set_id=fixture_set_id,
-        visible_tools=sorted(override) if override is not None else None,        run_records=run_records,
+        visible_tools=sorted(override) if override is not None else None,
+        run_records=run_records,
         stop_reason=stop_reason,
         skipped_runs=max(0, expected_runs - len(run_records)),
         min_valid_samples=resolved_min_valid,
@@ -1587,8 +1593,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--model",
         type=str,
-        default=os.getenv("LLM_MODEL", "glm-4.7-flash"),
-        help="模型名（默认取 LLM_MODEL 环境变量，缺省 glm-4.7-flash）",
+        default=os.getenv("LLM_MODEL", "Qwen/Qwen3.6-35B-A3B"),
+        help="模型名（默认取 LLM_MODEL 环境变量，缺省 Qwen/Qwen3.6-35B-A3B）",
     )
     parser.add_argument("--no-write-report", action="store_true")
     parser.add_argument(
