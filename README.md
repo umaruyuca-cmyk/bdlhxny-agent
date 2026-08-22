@@ -34,7 +34,7 @@ docker compose --env-file deploy/.env -f deploy/docker-compose.yml up -d --build
 ```
 
 - 私有运行 API：`http://127.0.0.1:8090`
-- 公开展示：`http://127.0.0.1:8082/docs/`
+- 公开展示：`http://127.0.0.1:8082/`（旧 `/docs/` 路径已 301 跳转到新位置）
 - 运行接口只接受固定 `case_id`，并要求项目所有者登录会话。
 
 只部署公开结果站：
