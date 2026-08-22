@@ -665,8 +665,9 @@ async def run_ab_eval(
         frozen = FrozenObservations(data.get_tool_fixtures(fixture_set_id))
     catalog_names = {c.name for c in catalog.list()}
     all_cards = [c for c in catalog.list() if c.name != "search_tools"]
-    # GT-4 可见集过滤(空列表归一 None,等同默认):三组同规则,单一变量纪律。
-    override = frozenset(visible_tools) if visible_tools else None
+    # GT-4 可见集过滤:None=按场景默认;[] 为显式空集(能力缺口实验,
+    # 与 None 严格区分——GT-5 勾选页依赖该区分);三组同规则,单一变量纪律。
+    override = frozenset(visible_tools) if visible_tools is not None else None
     if override is not None:
         all_cards = [c for c in all_cards if c.name in override]
     baseline_visible = frozenset(card.name for card in all_cards)
@@ -923,8 +924,7 @@ async def run_ab_eval(
         model=model,
         executor="frozen",
         fixture_set_id=fixture_set_id,
-        visible_tools=sorted(override) if override is not None else None,
-        run_records=run_records,
+        visible_tools=sorted(override) if override is not None else None,        run_records=run_records,
         stop_reason=stop_reason,
         skipped_runs=max(0, expected_runs - len(run_records)),
         min_valid_samples=resolved_min_valid,

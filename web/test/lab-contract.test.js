@@ -31,15 +31,35 @@ test("/lab 登录页与批次页存在，只在此处允许表单与运行 API �
   }
   assert.match(login, /sessionStorage/, "登录令牌只进 sessionStorage");
   assert.match(index, /case_ids/, "批次页只提交题号与实验配置");
-  // 提交体只允许五个键（与 EvalBatchRequest 对齐），不得夹带问题正文
+  // 提交体只允许七个键（与 EvalBatchRequest 对齐，GT-2/GT-4 增 fixture_set_id/visible_tools），
+  // 不得夹带问题正文
   const literal = index.match(/payload = \{([^}]*)\}/);
   const literalKeys = literal ? [...literal[1].matchAll(/\b([a-z_]+)\s*:/g)].map((m) => m[1]) : [];
   const assignKeys = [...index.matchAll(/payload\.([a-z_]+)\s*=/g)].map((m) => m[1]);
   assert.deepEqual(
     [...new Set([...literalKeys, ...assignKeys])].sort(),
-    ["case_ids", "include_react", "max_total_tokens", "model", "runs"],
+    ["case_ids", "fixture_set_id", "include_react", "max_total_tokens", "model", "runs", "visible_tools"],
   );
   assert.doesNotMatch(index, /payload\.?(message|prompt|system_prompt|tools)/, "不得提交问题正文、提示词或自定义工具");
+});
+
+test("/lab 工具可见集勾选区（GT-5）：加载目录、快捷操作与空集二次确认接线", async () => {
+  const index = await readFile(new URL("../public/lab/index.html", import.meta.url), "utf8");
+  assert.match(index, /\/api\/v1\/tools/, "勾选区目录来自工具端点");
+  assert.match(index, /id="toolGroups"/, "分组勾选容器存在");
+  assert.match(index, /id="toolFieldset"[^>]*disabled/, "目录加载前勾选区 disabled+骨架");
+  for (const button of ["toolAll", "toolNone", "toolDefault"]) {
+    assert.ok(index.includes(`id="${button}"`), `快捷操作 ${button} 需存在`);
+  }
+  assert.match(index, /visible_tools = visibleTools/, "显式勾选过才随批次提交 visible_tools");
+  assert.match(index, /confirm\(/, "空集（能力缺口实验）提交需二次确认");
+  assert.match(index, /未知工具名/, "400 被拒工具名需直接呈现");
+  // 勾选区只存在于 /lab：公开 12+ 页不得出现工具勾选控件或工具端点
+  for (const [dir, page] of PUBLIC_PAGES) {
+    const html = await readPublicPage(dir, page);
+    assert.ok(!html.includes("toolGroups"), `${dir || "root"}/${page}.html 不得出现工具勾选区`);
+    assert.doesNotMatch(html, /\/api\/v1\/tools/, `${dir || "root"}/${page}.html 不得调用工具目录端点`);
+  }
 });
 
 test("/lab 批次过程管理（任务四）：取消、预算与运行详情下钻均已接线", async () => {

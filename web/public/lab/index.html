@@ -16,6 +16,12 @@
   .lab-form legend { font-size: 13px; color: #5b6575; padding: 0 6px; }
   .case-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 4px 14px; font-size: 13.5px; }
   .case-list label { display: block; }
+  .tool-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px 14px; font-size: 13.5px; }
+  .tool-group { border: 1px solid #eef1f6; border-radius: 8px; padding: 6px 10px; }
+  .tool-group h4 { margin: 2px 0 6px; font-size: 12.5px; color: #5b6575; }
+  .tool-group label { display: block; }
+  .lab-mini { padding: 3px 12px; border: 1px solid #d8dee9; border-radius: 7px; background: #fff; cursor: pointer; font-size: 12.5px; }
+  fieldset[disabled] .lab-mini { cursor: not-allowed; color: #98a1af; }
   .lab-row { display: flex; gap: 18px; flex-wrap: wrap; font-size: 13.5px; align-items: center; }
   .lab-row label { display: flex; align-items: center; gap: 6px; }
   .lab-row input, .lab-row select { padding: 5px 8px; border: 1px solid #d8dee9; border-radius: 7px; font-size: 13.5px; }
@@ -56,11 +62,27 @@
       <legend>固定题号（全不选=全部题目）</legend>
       <div class="case-list" id="caseList"><span style="color:#98a1af">加载题库…</span></div>
     </fieldset>
+    <fieldset id="toolFieldset" disabled>
+      <legend>工具可见集（GT-4 实验变量；不动=按场景默认装载）</legend>
+      <div class="lab-row" style="margin-bottom:8px">
+        <button type="button" class="lab-mini" id="toolAll">全选</button>
+        <button type="button" class="lab-mini" id="toolNone">全不选</button>
+        <button type="button" class="lab-mini" id="toolDefault">场景默认</button>
+        <span class="lab-note" id="toolCount">已勾 0 / 共 0</span>
+      </div>
+      <div class="tool-groups" id="toolGroups"><span style="color:#98a1af">加载工具目录…</span></div>
+      <p class="lab-note">勾选后本次批次三组同规则收窄可见集（完整模式组 G1 按最终集拦截）；[场景默认]=清空选择并按场景策略装载（现状）。全不选=空集（无任何工具），仅用于「能力缺口」实验，提交时需二次确认。</p>
+    </fieldset>
     <div class="lab-row">
       <label>每题次数 <select id="runs"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option></select></label>
       <label><input type="checkbox" id="includeReact" checked> 含 LangGraph ReAct 组</label>
       <label>模型 <input id="model" placeholder="缺省取服务端 LLM_MODEL" style="width:200px"></label>
       <label>批次 token 上限 <input id="maxTotalTokens" type="number" min="1" placeholder="不限" style="width:110px"></label>
+      <label>冻结数据集 <select id="fixtureSetId">
+        <option value="">ab-eval（默认·金融正例）</option>
+        <option value="ab-eval-negative-v1">ab-eval-negative-v1（金融负例）</option>
+        <option value="mock-eval-v1">mock-eval-v1（通用正例）</option>
+      </select></label>
       <button class="lab-submit" type="submit" id="submitBtn">发起批次</button>
     </div>
     <p class="lab-note">批次在服务端串行执行（并发上限 1）；执行中可协作取消（已开始的模型调用会等待完成）。完成后经发布脚本投影到公开实证层。</p>
@@ -100,6 +122,56 @@
     document.getElementById("caseList").innerHTML = '<span class="bad">题库加载失败：' + err.message + "（检查隧道与 data 服务）</span>";
   });
 
+  // ── 工具可见集勾选区（GT-5）：目录来自 /api/v1/tools，按 domain 分组 ──
+  var toolsTouched = false; // 用户显式操作过勾选/快捷键才随批次提交 visible_tools
+  var toolCatalog = [];
+
+  function renderToolCount() {
+    var checked = document.querySelectorAll("#toolGroups input:checked").length;
+    document.getElementById("toolCount").textContent = "已勾 " + checked + " / 共 " + toolCatalog.length;
+  }
+
+  api("/api/v1/tools").then(function (outcome) {
+    if (outcome.status !== 200) throw new Error("工具目录加载失败（" + outcome.status + "）");
+    toolCatalog = outcome.body || [];
+    var byDomain = {};
+    toolCatalog.forEach(function (tool) {
+      var domain = tool.domain || "other";
+      (byDomain[domain] = byDomain[domain] || []).push(tool);
+    });
+    var html = Object.keys(byDomain).sort().map(function (domain) {
+      var items = byDomain[domain].map(function (tool) {
+        return '<label title="' + esc(tool.description || "") + '"><input type="checkbox" value="' + esc(tool.name) + '"> ' +
+          esc(tool.name) + (tool.enabled ? "" : ' <span class="badge INVALID">停用</span>') + "</label>";
+      }).join("");
+      return '<div class="tool-group"><h4>' + esc(domain) + "（" + byDomain[domain].length + "）</h4>" + items + "</div>";
+    }).join("");
+    var box = document.getElementById("toolGroups");
+    box.innerHTML = html || '<span class="lab-note">目录为空。</span>';
+    document.getElementById("toolFieldset").disabled = false;
+    renderToolCount();
+  }).catch(function (err) {
+    document.getElementById("toolGroups").innerHTML =
+      '<span class="bad">工具目录加载失败：' + err.message + '</span> <span class="lab-note">仍可按[场景默认]发起批次。</span>';
+    document.getElementById("toolFieldset").disabled = false;
+  });
+
+  function setAllTools(checked) {
+    Array.prototype.slice.call(document.querySelectorAll("#toolGroups input")).forEach(function (el) { el.checked = checked; });
+    toolsTouched = true;
+    renderToolCount();
+  }
+
+  document.getElementById("toolAll").addEventListener("click", function () { setAllTools(true); });
+  document.getElementById("toolNone").addEventListener("click", function () { setAllTools(false); });
+  document.getElementById("toolDefault").addEventListener("click", function () {
+    setAllTools(false);
+    toolsTouched = false; // 清空选择且回到"未显式选择"：提交不带 visible_tools
+  });
+  document.getElementById("toolGroups").addEventListener("change", function (event) {
+    if (event.target && event.target.type === "checkbox") { toolsTouched = true; renderToolCount(); }
+  });
+
   document.getElementById("logoutBtn").addEventListener("click", function () {
     api("/api/v1/logout", { method: "POST" }).catch(function () {});
     sessionStorage.removeItem("lab_token");
@@ -118,6 +190,14 @@
     if (model) payload.model = model;
     var tokens = Number(document.getElementById("maxTotalTokens").value);
     if (tokens >= 1) payload.max_total_tokens = tokens;
+    var fixtureSet = document.getElementById("fixtureSetId").value;
+    if (fixtureSet) payload.fixture_set_id = fixtureSet;
+    // 仅当用户显式操作过勾选区才携带 visible_tools（null=场景默认;[] =显式空集）
+    if (toolsTouched) {
+      var visibleTools = Array.prototype.slice.call(document.querySelectorAll("#toolGroups input:checked")).map(function (el) { return el.value; });
+      if (!visibleTools.length && !window.confirm("未勾选任何工具：空集=本次批次无任何工具（能力缺口实验）。确认提交？")) return;
+      payload.visible_tools = visibleTools;
+    }
 
     var btn = document.getElementById("submitBtn");
     var box = document.getElementById("jobBox");
@@ -126,7 +206,12 @@
 
     api("/api/v1/eval-batches", { method: "POST", body: JSON.stringify(payload) }).then(function (outcome) {
       if (outcome.status === 429) throw new Error("已有批次在运行，请等待完成");
-      if (outcome.status === 400) throw new Error("请求被拒绝：" + JSON.stringify(outcome.body));
+      if (outcome.status === 400) {
+        var detail = outcome.body && outcome.body.detail;
+        throw new Error(typeof detail === "string" && detail.indexOf("未知工具名") === 0
+          ? "请求被拒绝：" + detail
+          : "请求被拒绝：" + JSON.stringify(outcome.body));
+      }
       if (outcome.status !== 200) throw new Error("提交失败（" + outcome.status + "）");
       poll(outcome.body.job_id, outcome.body.batch_id);
     }).catch(function (err) {

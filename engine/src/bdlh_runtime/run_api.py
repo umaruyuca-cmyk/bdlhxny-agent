@@ -229,7 +229,7 @@ def start_eval_batch(
                 "interleaveSeed": DEFAULT_INTERLEAVE_SEED,
                 "maxTotalTokens": _max_total_tokens(request),
                 "fixtureSetId": request.fixture_set_id or "ab-eval",
-                "visibleTools": request.visible_tools or None,
+                "visibleTools": request.visible_tools,
             },
         )
     except DataServiceError as exc:
@@ -400,7 +400,7 @@ def _execute_eval(
             should_stop=(lambda: bool(job.get("cancel_requested"))) if job is not None else None,
             max_total_tokens=_max_total_tokens(request),
             fixture_set_id=request.fixture_set_id or "ab-eval",
-            visible_tools=request.visible_tools or None,
+            visible_tools=request.visible_tools,
         )
 
     report = asyncio.run(run())
@@ -418,19 +418,19 @@ def _max_total_tokens(request: EvalBatchRequest | ContextBatchRequest) -> int | 
 def _validate_visible_tools(data: DataClient, visible_tools: list[str] | None) -> None:
     """GT-4 可见集校验:元素必须 ⊆ 工具目录(含 search_tools);未知名 → 400。
 
-    空列表视为 null(等同场景默认),不进入比对。
+    None=按场景默认;[] 是显式空集(能力缺口实验,GT-5 勾选页"全不选"路径),
+    与 null 严格区分,不进入比对。
     """
-    names = [name for name in (visible_tools or []) if name]
-    if not names:
+    if not visible_tools:
         return
     try:
         payload = data.get_tool_catalog()
     except DataServiceError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     known = {str(item.get("name")) for item in payload.get("capabilities") or []}
-    if "search_tools" in names:
+    if "search_tools" in visible_tools:
         known = known | {"search_tools"}
-    unknown = [name for name in names if name not in known]
+    unknown = [name for name in visible_tools if name not in known]
     if unknown:
         raise HTTPException(status_code=400, detail=f"未知工具名：{sorted(set(unknown))}")
 

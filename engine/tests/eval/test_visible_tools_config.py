@@ -104,6 +104,18 @@ async def test_treatment_group_g1_rejects_unchecked_tool() -> None:
 
 
 @pytest.mark.asyncio
+async def test_explicit_empty_set_binds_no_tools() -> None:
+    """能力缺口实验:visible_tools=[] → 裸调用组零工具可见,任何调用都不可见。"""
+    report = await _run(runs_per_case=1, with_react=False, visible_tools=[])
+    judgment = report.cases[0].baseline_runs[0]
+    assert judgment.invisible_tools == [_GOLD]
+    record = report.run_records[0]
+    assert record.visible_tools == []
+    assert report.visible_tools == []
+    assert _report_payload(report)["visible_tools"] == []
+
+
+@pytest.mark.asyncio
 async def test_no_override_keeps_current_behavior() -> None:
     """反例:visible_tools=None → 三组行为不变,不可见率 0。"""
     report = await _run(runs_per_case=1, with_react=False)
@@ -174,13 +186,13 @@ def _capture_conditions(
     return captured
 
 
-def test_empty_visible_list_treated_as_default(
+def test_empty_visible_list_is_explicit_empty_set(
     client: TestClient,
     fake_data: FakeDataClient,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Any,
 ) -> None:
-    """空列表视为 null:不触发 400,落库 visibleTools=None。"""
+    """[] 与 null 严格区分(GT-5 取舍):空集落库为 [],不做默认归一。"""
     captured = _capture_conditions(
         client,
         fake_data,
@@ -188,7 +200,7 @@ def test_empty_visible_list_treated_as_default(
         tmp_path,
         {"case_ids": ["research-01"], "runs": 1, "include_react": False, "visible_tools": []},
     )
-    assert captured["visibleTools"] is None
+    assert captured["visibleTools"] == []
     assert captured["fixtureSetId"] == "ab-eval"
 
 
