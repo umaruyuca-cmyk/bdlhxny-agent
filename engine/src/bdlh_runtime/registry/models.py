@@ -34,6 +34,10 @@ class CapabilityRecord:
     enabled: bool
     operations: frozenset[str]
     toolsets: frozenset[str]
+    # GT-6 评测轴标注(read_only 恒为治理轴;写入性由 side_effect 表达)
+    side_effect: str = "none"
+    requires_confirmation: bool = False
+    risk_level: str = "low"
 
     def manifest(self) -> dict[str, object]:
         """给 Agent 菜单用的最小描述；不包含底层路由细节。"""

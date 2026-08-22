@@ -31,7 +31,8 @@ public class ToolCatalogRepository {
                 SELECT name, description, domain, adapter, read_only,
                        requires_authenticated_user, required_arguments::text AS required_arguments,
                        depends_on::text AS depends_on, timeout_seconds, enabled,
-                       operations::text AS operations, toolsets::text AS toolsets
+                       operations::text AS operations, toolsets::text AS toolsets,
+                       side_effect, requires_confirmation, risk_level
                 FROM touchstone.tool_capabilities
                 ORDER BY name
                 """,
@@ -83,6 +84,10 @@ public class ToolCatalogRepository {
         row.put("enabled", rs.getBoolean("enabled"));
         row.put("operations", readJson(rs.getString("operations")));
         row.put("toolsets", readJson(rs.getString("toolsets")));
+        // GT-6 评测轴三列:判官(未确认写入率等)经目录 payload 透出
+        row.put("side_effect", rs.getString("side_effect"));
+        row.put("requires_confirmation", rs.getBoolean("requires_confirmation"));
+        row.put("risk_level", rs.getString("risk_level"));
         return row;
     }
 

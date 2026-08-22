@@ -196,6 +196,9 @@ def list_tools(account: Annotated[dict[str, Any], Depends(require_login)]) -> li
                 "description": str(item.get("description") or ""),
                 "domain": str(item.get("domain") or ""),
                 "enabled": bool(item.get("enabled", True)),
+                # GT-6 评测轴:勾选页高风险红点/写操作类默认不勾的消费字段
+                "side_effect": str(item.get("side_effect") or "none"),
+                "risk_level": str(item.get("risk_level") or "low"),
             }
         )
     return tools

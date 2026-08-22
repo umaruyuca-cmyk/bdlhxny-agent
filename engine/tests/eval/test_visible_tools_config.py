@@ -232,5 +232,7 @@ def test_tools_endpoint_proxies_catalog(client: TestClient) -> None:
     names = [tool["name"] for tool in tools]
     assert "market.get_realtime_quote" in names
     for tool in tools:
-        assert set(tool) == {"name", "description", "domain", "enabled"}
+        assert set(tool) == {"name", "description", "domain", "enabled", "side_effect", "risk_level"}
         assert tool["enabled"] is True
+        assert tool["side_effect"] == "none"
+        assert tool["risk_level"] == "low"

@@ -141,8 +141,10 @@
     });
     var html = Object.keys(byDomain).sort().map(function (domain) {
       var items = byDomain[domain].map(function (tool) {
+        var riskMark = tool.risk_level === "high" ? ' <span title="高风险工具" style="color:#b23b3b">●</span>'
+          : (tool.side_effect && tool.side_effect !== "none" ? ' <span title="写操作类工具" style="color:#9a6b0b">◐</span>' : "");
         return '<label title="' + esc(tool.description || "") + '"><input type="checkbox" value="' + esc(tool.name) + '"> ' +
-          esc(tool.name) + (tool.enabled ? "" : ' <span class="badge INVALID">停用</span>') + "</label>";
+          esc(tool.name) + riskMark + (tool.enabled ? "" : ' <span class="badge INVALID">停用</span>') + "</label>";
       }).join("");
       return '<div class="tool-group"><h4>' + esc(domain) + "（" + byDomain[domain].length + "）</h4>" + items + "</div>";
     }).join("");

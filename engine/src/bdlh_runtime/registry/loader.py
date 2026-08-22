@@ -60,6 +60,9 @@ def load_and_validate_payload(payload: dict[str, Any]) -> RegistrySnapshot:
                 enabled=bool(item.get("enabled", True)),
                 operations=frozenset(str(op) for op in item.get("operations") or []),
                 toolsets=frozenset(str(toolset) for toolset in item.get("toolsets") or []),
+                side_effect=str(item.get("side_effect") or "none"),
+                requires_confirmation=bool(item.get("requires_confirmation") or False),
+                risk_level=str(item.get("risk_level") or "low"),
             )
             for item in payload["capabilities"]
         ]
